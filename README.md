@@ -66,7 +66,7 @@ Kindle で見て欠けている隅があれば、その辺が切れている。
 読み直しでは新旧の設定を比べ、**実際に変わった取得元だけ**を作り直す。
 レイアウトや余白を直しただけなら、ぴよログやカレンダーのキャッシュはそのまま残り、
 外部へ取りに行くことはない。取得元の URL・取得間隔・タイムゾーンが変わったときだけ、
-そのフィードを空から取り直す。
+そのフィードを空から取り直す。取得元が複数あれば、変わったものだけが対象になる。
 
 設定に誤りがあれば読み直しを見送り、動いている設定のまま続ける。理由はログに出る。
 起動引数（ポート・置き方・マーカー）は読み直しの対象ではないので、変えるなら再起動する。
@@ -97,21 +97,34 @@ padding: { top: 28, right: 28, bottom: 60, left: 28 }
 
 ### データ取得元（`sources`）
 
+取得元には自由に名前を付け、`type` で種別を選ぶ。同じ種別をいくつでも定義できる。
+項目からはこの名前で指す。
+
 ```yaml
 sources:
-  piyolog:
+  ぴよログ:
+    type: piyolog
     url: "https://feed.piyolog.com/v1/feed/24h/FEED_ID/SECRET"
     interval_sec: 300
-  calendar:
+  かぞく:
+    type: calendar
     url: "https://calendar.google.com/calendar/ical/xxxx%40group.calendar.google.com/private-yyyy/basic.ics"
     interval_sec: 600
+  ほいくえん:
+    type: calendar
+    url: "https://calendar.google.com/calendar/ical/zzzz%40group.calendar.google.com/private-wwww/basic.ics"
 ```
 
-- `piyolog` — ぴよログの iOS アプリで「設定 → データフィード」から発行した URL。
-  取得は 1 分に 1 回までが目安で、取得期間ごとにキャッシュ保持時間がある
-  （24h: 1 分 / 3d: 2 分 / 7d: 5 分 / 28d: 15 分）。`interval_sec` はそれ以上にする。
-- `calendar` — Google カレンダーの「設定 → カレンダーの統合 → iCal 形式の非公開 URL」。
-- 使わない項目しか置いていないなら、その取得元は省略してよい。
+| `type` | 取得元 | `interval_sec` の既定 |
+| --- | --- | --- |
+| `piyolog` | ぴよログの iOS アプリで「設定 → データフィード」から発行した URL | `300` |
+| `calendar` | Google カレンダーの「設定 → カレンダーの統合 → iCal 形式の非公開 URL」 | `600` |
+
+ぴよログの取得は 1 分に 1 回までが目安で、取得期間ごとにキャッシュ保持時間がある
+（24h: 1 分 / 3d: 2 分 / 7d: 5 分 / 28d: 15 分）。`interval_sec` はそれ以上にする。
+どちらも最短 60 秒で、それより短い値は設定エラーになる。
+
+使わない項目しか置いていないなら、その取得元は省略してよい。
 
 ### レイアウト（`columns`）
 
@@ -136,25 +149,33 @@ columns:
 ```yaml
 - type: countdown
   label: つぎのごはん
+  days: [mon, tue, wed, thu, fri]     # 項目全体の既定。省略すれば毎日
   times:
     - { at: "07:30", name: あさごはん }
     - { at: "12:00", name: おひるごはん }
+    - { at: "10:00", name: ほいくえん, days: [tue, thu] }
     - "18:00"
 ```
 
-`times` は毎日繰り返す時刻の一覧。今より後でいちばん近いものを選び、
-その時刻・残り時間・名前を出す。今日の分が全部過ぎていれば翌日の最初の時刻になる。
-`name` を省いた `"18:00"` のような書き方もできる。
+`times` は繰り返す時刻の一覧。今より後でいちばん近いものを選び、
+その時刻・残り時間・名前を出す。`name` を省いた `"18:00"` のような書き方もできる。
+
+`days` を書くと、その曜日だけ有効になる。書かなければ毎日。
+項目に書いた `days` が既定になり、時刻ごとの `days` がそれを上書きする。
+曜日は `sun` `mon` `tue` `wed` `thu` `fri` `sat`。
+日をまたぐときは「あす」、週をまたぐときは日付を添える。
 
 #### `milk` — 次のミルクの時間
 
 ```yaml
 - type: milk
   label: つぎのミルク
+  source: ぴよログ
   interval_min: 180
   record_types: [Formula, BreastFeeding]
 ```
 
+`source` はどのぴよログを見るか。省略すれば最初に定義した `piyolog` の取得元。
 ぴよログの直近の記録から `interval_min` 分後を目標にする。
 `record_types` は対象にする記録の種類（既定は `[Formula]`）。
 `Formula` = ミルク、`BreastFeeding` = 母乳、`ExpressedBreastMilk` = 搾母乳。
@@ -166,10 +187,24 @@ columns:
 - type: calendar
   label: つぎのよてい
   count: 5
+  sources: [かぞく, ほいくえん]
+  match: "*クリニック*"
 ```
 
 `count` は出す件数（既定 3）。進行中の予定も残す。
 今日なら時刻だけ、翌日なら「あす」、それ以降は日付を添える。
+
+`sources` はどのカレンダーを見るか。複数指定すると、まとめて日付順に並べる。
+省略すれば最初に定義した `calendar` の取得元。
+
+`match` を書くと、件名が一致した予定だけを出す。
+`/.../` で囲めば正規表現、そうでなければワイルドカード（`*` と `?`、全体一致）。
+
+```yaml
+match: "*クリニック*"            # 件名に「クリニック」を含む
+match: "/^(えんそく|けんしん)/"   # 件名が「えんそく」か「けんしん」で始まる
+match: "/clinic/i"              # 大文字小文字を区別しない
+```
 
 #### `clock` — 時間の表示
 
@@ -226,7 +261,7 @@ columns:
 | `src/layout.js` | カラムと項目の配置 |
 | `src/render.js` | SVG 組み立て → 回転 → グレースケール PNG |
 | `src/page.js` | 全画面 `<img>` + ES5 ポーリングスクリプト |
-| `src/sources/` | ぴよログ・カレンダーの取得とキャッシュ |
+| `src/sources/` | 取得元の種別と、ぴよログ・カレンダーの取得とキャッシュ |
 | `src/widgets/` | 組み込みの項目（検証・組み立て・描画） |
 
 ## テスト
