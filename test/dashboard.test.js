@@ -8,6 +8,7 @@ import { parseIcs } from '../src/sources/calendar.js';
 import { parseFeed } from '../src/sources/piyolog.js';
 import { renderScreen } from '../src/render.js';
 import * as calendarWidget from '../src/widgets/calendar.js';
+import * as countdownWidget from '../src/widgets/countdown.js';
 
 const TZ = 'Asia/Tokyo';
 /** 2026-09-22 (火) 14:00 JST。固定した「いま」。 */
@@ -144,6 +145,34 @@ test('取得元の指定が間違っていれば起動前に分かる', () => {
     () => calendarWidget.normalize({ type: 'calendar', sources: ['ぴよログ'] }, at, DEFINED_SOURCES),
     /calendar の取得元を指定してください/
   );
+});
+
+test('countdown は曜日で絞り込める', () => {
+  const ctx = { now: NOW, timezone: TZ, sources: {} };
+  const at = 'columns[0].items[0]';
+
+  // 2026-09-22 (火) 14:00 から見て、次の水曜は翌日。
+  const weekdays = countdownWidget.normalize(
+    { type: 'countdown', days: ['mon', 'wed', 'fri'], times: ['09:00'] },
+    at
+  );
+  assert.deepEqual(countdownWidget.build(weekdays, ctx), {
+    label: '',
+    time: '09:00',
+    remaining: 'あと 19時間',
+    note: 'あす',
+  });
+
+  // 週をまたぐときは日付を添える。
+  const saturday = countdownWidget.normalize({ type: 'countdown', days: ['sat'], times: ['07:00'] }, at);
+  assert.equal(countdownWidget.build(saturday, ctx).note, '9/26(土)');
+
+  // 時刻ごとの days は項目の days より優先される。
+  const override = countdownWidget.normalize(
+    { type: 'countdown', days: ['sat'], times: [{ at: '09:00', name: 'ほいくえん', days: ['wed'] }] },
+    at
+  );
+  assert.equal(countdownWidget.build(override, ctx).note, 'あす · ほいくえん');
 });
 
 test('ぴよログが取れていなければ項目に理由を出す', async () => {

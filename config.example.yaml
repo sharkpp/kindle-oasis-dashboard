@@ -62,6 +62,8 @@ columns:
           - { at: "12:00", name: おひるごはん }
           - { at: "15:00", name: おやつ }
           - { at: "18:00", name: ばんごはん }
+          # 曜日を書くと、その曜日だけ有効になる。書かなければ毎日。
+          - { at: "10:00", name: ほいくえんのおやつ, days: [mon, tue, wed, thu, fri] }
 
       - type: section
         height: 0.8
@@ -95,6 +97,8 @@ columns:
       - type: countdown
         height: 2.5
         label: おふろ
+        # 項目に days を書くと、その項目の時刻すべての既定になる。
+        days: [sun, mon, tue, wed, thu, fri, sat]
         times: ["19:00"]
 
       - type: countdown
