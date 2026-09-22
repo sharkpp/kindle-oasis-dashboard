@@ -2,20 +2,28 @@ import http from 'node:http';
 import os from 'node:os';
 import { renderScreen } from './render.js';
 import { renderPage } from './page.js';
-import {
-  DEFAULT_VIEWPORT,
-  PROBE_GIF,
-  getViewport,
-  isDetected,
-  probeCss,
-  recordProbe,
-} from './viewport.js';
 
 const PORT = Number(process.env.PORT ?? 3000);
-const REFRESH_SEC = Number(process.env.REFRESH_SEC ?? 30);
+/** 画面の内容を新しくする間隔。これが変わるとクライアントが画像を取り直す。 */
+const UPDATE_SEC = Number(process.env.UPDATE_SEC ?? 30);
+/** クライアントが更新の有無を確認しに来る間隔。 */
+const POLL_SEC = Number(process.env.POLL_SEC ?? 5);
+
+const DEFAULT_VIEWPORT = { width: 1264, height: 1680 };
 
 const startedAt = Date.now();
 let screenCount = 0;
+let revision = 1;
+
+/** 直近にポーリングしてきたクライアントの状態。画像に描いて実機で確認する。 */
+let client = null;
+/** クライアントが実測したビューポート。次の HTML 生成に使う。 */
+let viewport = { ...DEFAULT_VIEWPORT };
+
+const updateTimer = setInterval(() => {
+  revision += 1;
+}, UPDATE_SEC * 1000);
+updateTimer.unref();
 
 /** 端末がキャッシュを返さないよう、毎回すべての手段で無効化する。 */
 function noStore(res) {
@@ -29,19 +37,53 @@ function clampSize(value, fallback) {
   return Number.isFinite(n) && n >= 120 && n <= 4096 ? Math.round(n) : fallback;
 }
 
+function clampCount(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? Math.round(n) : 0;
+}
+
+/** クライアントが URL に載せてきた稼働状況を取り込む。 */
+function recordClient(params) {
+  if (!params.has('polls')) return;
+  client = {
+    polls: clampCount(params.get('polls')),
+    errors: clampCount(params.get('errors')),
+    lastSeenAt: Date.now(),
+  };
+  const width = clampSize(params.get('w'), 0);
+  const height = clampSize(params.get('h'), 0);
+  if (width && height && (viewport.width !== width || viewport.height !== height)) {
+    viewport = { width, height };
+    console.log(`  -> viewport reported by client: ${width} x ${height} px`);
+  }
+}
+
 async function handle(req, res, url) {
   if (url.pathname === '/' || url.pathname === '/index.html') {
-    const { width, height } = getViewport();
-    const body = renderPage({ width, height, refreshSec: REFRESH_SEC, token: Date.now() });
+    const body = renderPage({
+      width: viewport.width,
+      height: viewport.height,
+      revision,
+      pollSec: POLL_SEC,
+      token: Date.now(),
+    });
     noStore(res);
-    // meta refresh に加えて HTTP ヘッダでも更新を指示する。
-    res.setHeader('Refresh', String(REFRESH_SEC));
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(body);
     return;
   }
 
+  if (url.pathname === '/revision') {
+    recordClient(url.searchParams);
+    const body = String(revision);
+    noStore(res);
+    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Content-Length': body.length });
+    res.end(body);
+    return;
+  }
+
   if (url.pathname === '/screen.png') {
+    recordClient(url.searchParams);
     const width = clampSize(url.searchParams.get('w'), DEFAULT_VIEWPORT.width);
     const height = clampSize(url.searchParams.get('h'), DEFAULT_VIEWPORT.height);
     screenCount += 1;
@@ -50,35 +92,15 @@ async function handle(req, res, url) {
       height,
       now: new Date(),
       count: screenCount,
-      refreshSec: REFRESH_SEC,
+      revision,
+      updateSec: UPDATE_SEC,
+      pollSec: POLL_SEC,
       uptimeMs: Date.now() - startedAt,
+      client: client && { ...client, lastSeenAgoMs: Date.now() - client.lastSeenAt },
     });
     noStore(res);
     res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': png.length });
     res.end(png);
-    return;
-  }
-
-  if (url.pathname === '/probe.css') {
-    const { body, encoding } = probeCss(/\bgzip\b/.test(req.headers['accept-encoding'] ?? ''));
-    noStore(res);
-    if (encoding) res.setHeader('Content-Encoding', encoding);
-    res.writeHead(200, { 'Content-Type': 'text/css; charset=utf-8', 'Content-Length': body.length });
-    res.end(body);
-    return;
-  }
-
-  if (url.pathname === '/probe') {
-    const changed = recordProbe({
-      width: clampSize(url.searchParams.get('w'), 0),
-      height: clampSize(url.searchParams.get('h'), 0),
-    });
-    if (changed) {
-      console.log(`  -> viewport detected: ${changed.width} x ${changed.height} px`);
-    }
-    noStore(res);
-    res.writeHead(200, { 'Content-Type': 'image/gif', 'Content-Length': PROBE_GIF.length });
-    res.end(PROBE_GIF);
     return;
   }
 
@@ -88,9 +110,12 @@ async function handle(req, res, url) {
 
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host ?? 'localhost'}`);
-  console.log(
-    `${new Date().toISOString()} ${req.method} ${req.url} ua="${req.headers['user-agent'] ?? '-'}"`
-  );
+  // ポーリングはログが流れやすいので、画面が変わるやり取りだけを残す。
+  if (url.pathname !== '/revision') {
+    console.log(
+      `${new Date().toISOString()} ${req.method} ${req.url} ua="${req.headers['user-agent'] ?? '-'}"`
+    );
+  }
   handle(req, res, url).catch((err) => {
     console.error(err);
     if (!res.headersSent) res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -106,10 +131,20 @@ function lanAddresses() {
 }
 
 server.listen(PORT, '0.0.0.0', () => {
-  const size = getViewport();
-  console.log(`MyRealDashboard prototype — refresh every ${REFRESH_SEC}s`);
-  console.log(`image size: ${size.width} x ${size.height} px${isDetected() ? '' : ' (default)'}`);
+  console.log(`MyRealDashboard prototype — update every ${UPDATE_SEC}s, poll every ${POLL_SEC}s`);
+  console.log(`image size: ${viewport.width} x ${viewport.height} px (default)`);
   for (const address of ['localhost', ...lanAddresses()]) {
     console.log(`  http://${address}:${PORT}/`);
   }
 });
+
+// ポーリングが届いているかを定期的に知らせる。実機で JavaScript が動いたかの判断材料。
+const watchTimer = setInterval(() => {
+  const age = client ? Math.round((Date.now() - client.lastSeenAt) / 1000) : null;
+  console.log(
+    client
+      ? `client: poll #${client.polls}, errors ${client.errors}, last ${age}s ago, rev ${revision}`
+      : `client: no polling yet, rev ${revision}`
+  );
+}, Math.max(UPDATE_SEC, 30) * 1000);
+watchTimer.unref();

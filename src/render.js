@@ -15,11 +15,18 @@ function formatUptime(ms) {
   return `${pad(Math.floor(total / 3600))}:${pad(Math.floor(total / 60) % 60)}:${pad(total % 60)}`;
 }
 
+/** ポーリングが生きているかを一目で判断するための行。 */
+function clientStatus(client) {
+  if (!client) return 'js poll: none yet -- javascript may be disabled';
+  const ago = Math.round(client.lastSeenAgoMs / 1000);
+  return `js poll #${client.polls}  errors ${client.errors}  last ${ago}s ago`;
+}
+
 /**
  * 画面全体を占める SVG を組み立てる。
  * 幅・高さは端末のビューポートに合わせて可変なので、すべて比率で配置する。
  */
-function buildSvg({ width, height, now, count, refreshSec, uptimeMs }) {
+function buildSvg({ width, height, now, count, revision, updateSec, pollSec, uptimeMs, client }) {
   const base = Math.min(width, height);
   const margin = Math.round(base * 0.02);
   const line = Math.max(2, Math.round(base * 0.004));
@@ -47,7 +54,7 @@ function buildSvg({ width, height, now, count, refreshSec, uptimeMs }) {
     )
     .join('');
 
-  // 「秒」の進み具合を示すバー。リロードのたびに確実に見た目が変わる。
+  // 「秒」の進み具合を示すバー。更新のたびに確実に見た目が変わる。
   const barX = margin * 2;
   const barW = width - margin * 4;
   const barY = height * 0.66;
@@ -65,7 +72,9 @@ function buildSvg({ width, height, now, count, refreshSec, uptimeMs }) {
   }).join('');
 
   const date = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} (${WEEKDAYS[now.getDay()]})`;
-  const footer = `viewport ${width} x ${height} px  /  uptime ${formatUptime(uptimeMs)}  /  no javascript, meta refresh only`;
+  const status = clientStatus(client);
+  const statusSize = fitMono(status, base * 0.034);
+  const footer = `viewport ${width} x ${height} px  /  uptime ${formatUptime(uptimeMs)}  /  polling, no meta refresh`;
   const footSize = fitMono(footer, base * 0.028);
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
@@ -74,15 +83,16 @@ function buildSvg({ width, height, now, count, refreshSec, uptimeMs }) {
 <g fill="none" stroke="#000000" stroke-width="${line * 2}">${corners}</g>
 
 <text x="${margin * 2}" y="${margin * 2 + headSize}" font-family="${SANS}" font-size="${headSize}" fill="#000000">MyRealDashboard — prototype</text>
-<text x="${width - margin * 2}" y="${margin * 2 + headSize}" font-family="${MONO}" font-size="${headSize}" fill="#000000" text-anchor="end">#${count}</text>
+<text x="${width - margin * 2}" y="${margin * 2 + headSize}" font-family="${MONO}" font-size="${headSize}" fill="#000000" text-anchor="end">rev ${revision} / #${count}</text>
 
 <text x="${width / 2}" y="${height * 0.3}" font-family="${SANS}" font-size="${dateSize}" fill="#000000" text-anchor="middle">${esc(date)}</text>
 <text x="${width / 2}" y="${height * 0.5}" font-family="${MONO}" font-size="${clockSize}" fill="#000000" text-anchor="middle">${clockText}</text>
-<text x="${width / 2}" y="${height * 0.575}" font-family="${SANS}" font-size="${infoSize}" fill="#000000" text-anchor="middle">${refreshSec} 秒ごとに再読み込み</text>
+<text x="${width / 2}" y="${height * 0.575}" font-family="${SANS}" font-size="${infoSize}" fill="#000000" text-anchor="middle">${updateSec} 秒ごとに更新 / ${pollSec} 秒ごとにポーリング</text>
 
 <rect x="${barX}" y="${barY}" width="${barW}" height="${barH}" fill="none" stroke="#000000" stroke-width="${line}"/>
 <rect x="${barX}" y="${barY}" width="${(barW * seconds) / 60}" height="${barH}" fill="#000000"/>
 ${grays}
+<text x="${width / 2}" y="${height * 0.87}" font-family="${MONO}" font-size="${statusSize}" fill="#000000" text-anchor="middle">${esc(status)}</text>
 <text x="${width / 2}" y="${height - margin * 2}" font-family="${MONO}" font-size="${footSize}" fill="#000000" text-anchor="middle">${esc(footer)}</text>
 </svg>`;
 }
