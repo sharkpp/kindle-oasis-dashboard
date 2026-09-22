@@ -3,15 +3,18 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "E-ink dashboard prototype for the Kindle Oasis built-in browser",
+  "description": "Kindle の内蔵ブラウザで見る、子供の予定ダッシュボード",
   "main": "src/server.js",
   "scripts": {
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "test": "node --test"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
-    "sharp": "^0.34.5"
+    "ical.js": "^2.2.1",
+    "sharp": "^0.34.5",
+    "yaml": "^2.9.1"
   }
 }
