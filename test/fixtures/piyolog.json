@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-09-22T05:00:00.000Z",
+  "range": { "from": "2026-09-21T05:00:00.000Z", "to": "2026-09-22T05:00:00.000Z" },
+  "records": [
+    { "event_id": "a1", "datetime": "2026-09-21T21:00:00.000Z", "type": "WakeUp" },
+    { "event_id": "a2", "datetime": "2026-09-22T00:30:00.000Z", "type": "Formula", "value": { "value": 120, "unit": "ml" } },
+    { "event_id": "a3", "datetime": "2026-09-22T01:40:00.000Z", "type": "BreastFeeding", "last": "right", "leftTime": 300, "rightTime": 240 },
+    { "event_id": "a4", "datetime": "2026-09-22T03:15:00.000Z", "type": "Formula", "value": { "value": 140, "unit": "ml" }, "memo": "のこさず飲んだ" },
+    { "event_id": "a5", "datetime": "2026-09-22T04:00:00.000Z", "type": "Poop", "details": { "amount": "normal", "hardness": "soft", "color": "yellow" } }
+  ]
+}

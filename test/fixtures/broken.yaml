@@ -1,0 +1,5 @@
+timezone: Asia/Tokyo
+columns:
+  - items:
+      - type: countdown
+        times: ["07:30", "25:00"]
