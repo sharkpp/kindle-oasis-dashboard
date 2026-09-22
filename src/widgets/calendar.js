@@ -1,0 +1,95 @@
+/**
+ * 次の予定。Google カレンダーの iCal フィードから取得する。
+ *
+ * 進行中の予定も「いま」の欄として残し、その後に控えている予定を続ける。
+ */
+
+import { MONO, SANS, ellipsize, fitSize, text, textWidth } from '../svg.js';
+import { dayDiff, formatClock, formatShortDate } from '../time.js';
+import { SUB_INK, footer, header, inset, unavailable } from './common.js';
+import { asNumber, asString } from '../validate.js';
+
+export const type = 'calendar';
+
+export function normalize(item, path) {
+  return {
+    label: asString(item.label, `${path}.label`, { fallback: '' }),
+    count: asNumber(item.count, `${path}.count`, { fallback: 3, min: 1, max: 10, integer: true }),
+  };
+}
+
+/** 予定の開始を、その日らしさが分かる短い文字列にする。 */
+function whenLabel(event, now, timezone) {
+  const days = dayDiff(now, event.start, timezone);
+  const day = days === 0 ? '' : days === 1 ? 'あす' : formatShortDate(event.start, timezone);
+  if (event.allDay) return [day || 'きょう', '終日'].join(' ');
+  const clock = formatClock(event.start, timezone);
+  return day ? `${day} ${clock}` : clock;
+}
+
+export function build(options, ctx) {
+  const feed = ctx.sources.calendar;
+  if (!feed) return { label: options.label, entries: [], note: 'カレンダーの設定がありません' };
+  if (!feed.data) {
+    return {
+      label: options.label,
+      entries: [],
+      note: feed.error ? 'カレンダーを取得できません' : 'カレンダーを取得中',
+    };
+  }
+
+  const entries = feed.data.events
+    .filter((event) => event.end > ctx.now)
+    .slice(0, options.count)
+    .map((event) => ({
+      when: whenLabel(event, ctx.now, ctx.timezone),
+      summary: event.summary || '(件名なし)',
+      now: event.start <= ctx.now,
+    }));
+
+  return {
+    label: options.label,
+    entries,
+    note: entries.length === 0 ? 'この先の予定はありません' : '',
+  };
+}
+
+export function render(model, box) {
+  const head = header(model.label, inset(box));
+  const foot = footer(model.note, head.rest);
+  if (model.entries.length === 0) return head.svg + foot.svg + unavailable(foot.rest);
+
+  const area = foot.rest;
+  const rowHeight = area.h / model.entries.length;
+  // 時刻の欄は最も長い表記に合わせて固定し、件名の開始位置を揃える。
+  const longestWhen = model.entries.reduce(
+    (longest, entry) => (textWidth(entry.when, MONO) > textWidth(longest, MONO) ? entry.when : longest),
+    ''
+  );
+  const size = Math.min(rowHeight * 0.46, fitSize(longestWhen, area.w * 0.42, rowHeight, MONO));
+  const summaryX = area.x + textWidth(longestWhen, MONO) * size + size * 0.6;
+
+  return (
+    head.svg +
+    model.entries
+      .map((entry, i) => {
+        const y = area.y + rowHeight * (i + 0.5);
+        const when = text(entry.when, {
+          x: area.x,
+          y,
+          size,
+          font: MONO,
+          fill: entry.now ? '#000000' : SUB_INK,
+        });
+        const summary = text(ellipsize(entry.summary, area.x + area.w - summaryX, size, SANS), {
+          x: summaryX,
+          y,
+          size,
+          font: SANS,
+          weight: entry.now ? 'bold' : 'normal',
+        });
+        return when + summary;
+      })
+      .join('')
+  );
+}
