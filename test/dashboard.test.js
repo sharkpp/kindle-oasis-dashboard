@@ -163,3 +163,62 @@ test('横向きの指定では縦横を入れ替えて描いてから回す', as
     }
   }
 });
+
+test('設定を読み直しても、取得元が同じならキャッシュを捨てない', async () => {
+  const dashboard = dashboardWithFixtures();
+  await dashboard.tick(NOW);
+  const feeds = { ...dashboard.feeds };
+
+  const next = loadConfig(configPath());
+  next.columns[0].items[0].height = 5;
+  const changes = dashboard.applyConfig(next, NOW);
+
+  assert.deepEqual(changes, ['レイアウト']);
+  assert.equal(dashboard.feeds.piyolog, feeds.piyolog, '同じフィードを使い続ける');
+  assert.equal(dashboard.feeds.calendar, feeds.calendar);
+  assert.ok(dashboard.feeds.piyolog.data, '取り込み済みの内容が残る');
+});
+
+test('取得元が変われば、そのフィードだけ作り直す', async () => {
+  const dashboard = dashboardWithFixtures();
+  await dashboard.tick(NOW);
+  const feeds = { ...dashboard.feeds };
+
+  const next = loadConfig(configPath());
+  next.sources.piyolog.interval_sec = undefined;
+  next.sources.piyolog.url = 'https://feed.piyolog.com/v1/feed/24h/OTHER/SECRET';
+  const changes = dashboard.applyConfig(next, NOW);
+
+  assert.deepEqual(changes, ['ぴよログ: 取得元が変わったので取り直す']);
+  assert.notEqual(dashboard.feeds.piyolog, feeds.piyolog);
+  assert.equal(dashboard.feeds.piyolog.data, null, '新しい取得元のキャッシュは空から始まる');
+  assert.equal(dashboard.feeds.calendar, feeds.calendar, '変えていない取得元は触らない');
+});
+
+test('タイムゾーンを変えるとカレンダーだけ作り直す', async () => {
+  const dashboard = dashboardWithFixtures();
+  await dashboard.tick(NOW);
+  const feeds = { ...dashboard.feeds };
+
+  const next = loadConfig(configPath());
+  next.timezone = 'Asia/Seoul';
+  const changes = dashboard.applyConfig(next, NOW);
+
+  // 終日の予定の解釈にタイムゾーンを使うので、カレンダーは読み直す必要がある。
+  assert.deepEqual(changes, ['カレンダー: 取得元が変わったので取り直す', 'タイムゾーン: Asia/Seoul']);
+  assert.equal(dashboard.feeds.piyolog, feeds.piyolog);
+  assert.notEqual(dashboard.feeds.calendar, feeds.calendar);
+});
+
+test('取得元を外すとフィードごと消える', async () => {
+  const dashboard = dashboardWithFixtures();
+  await dashboard.tick(NOW);
+
+  const next = loadConfig(configPath());
+  next.sources.piyolog = null;
+  const changes = dashboard.applyConfig(next, NOW);
+
+  assert.deepEqual(changes, ['ぴよログ: 取得元の設定を外した']);
+  assert.equal(dashboard.feeds.piyolog, undefined);
+  assert.equal(findItem(dashboard.view, 'milk').note, 'ぴよログの設定がありません');
+});

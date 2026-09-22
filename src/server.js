@@ -1,6 +1,7 @@
 import http from 'node:http';
 import os from 'node:os';
 import process from 'node:process';
+import { statSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import { ConfigError, loadConfig } from './config.js';
 import { Dashboard } from './dashboard.js';
@@ -57,6 +58,38 @@ try {
 const DEFAULT_VIEWPORT = { width: 1264, height: 1680 };
 /** クライアントが実測したビューポート。次の HTML 生成に使う。 */
 let viewport = { ...DEFAULT_VIEWPORT };
+
+/** 設定ファイルが書き換わったかを見分けるための印。 */
+function configStamp() {
+  try {
+    const stat = statSync(options.config);
+    return `${stat.mtimeMs}:${stat.size}`;
+  } catch {
+    return null;
+  }
+}
+let stamp = configStamp();
+
+/**
+ * 設定ファイルが書き換わっていれば読み直す。
+ * 読めない設定は捨てて、動いている設定をそのまま使い続ける。
+ */
+function reloadConfigIfChanged() {
+  const next = configStamp();
+  if (next === stamp) return;
+  stamp = next;
+  try {
+    const changes = dashboard.applyConfig(loadConfig(options.config));
+    console.log(
+      changes.length
+        ? `設定を読み直しました — ${changes.join(' / ')}`
+        : '設定を読み直しました（表示に影響する変更はありません）'
+    );
+  } catch (err) {
+    const reason = err instanceof ConfigError ? err.message : err;
+    console.error(`設定を読み直せませんでした — ${reason}（前の設定のまま続けます）`);
+  }
+}
 
 /** 端末がキャッシュを返さないよう、毎回すべての手段で無効化する。 */
 function noStore(res) {
@@ -147,14 +180,13 @@ function lanAddresses() {
     .map((iface) => iface.address);
 }
 
-// 表示内容が変わったときだけ版番号が上がる。クライアントはそれを見て画像を取り直す。
-const tick = setInterval(() => {
-  dashboard.tick().catch((err) => console.error(err));
-}, dashboard.config.tickSec * 1000);
-tick.unref();
-
-// 最初の取得は待たずに待ち受けを始める。取得中であることは画面の各項目が出す。
-dashboard.tick().catch((err) => console.error(err));
+// 設定を読み直してから表示内容を作る。更新間隔も設定で変わるので、毎回組み直す。
+async function loop() {
+  reloadConfigIfChanged();
+  await dashboard.tick();
+  setTimeout(loop, dashboard.config.tickSec * 1000).unref();
+}
+loop().catch((err) => console.error(err));
 
 server.listen(options.port, '0.0.0.0', () => {
   console.log(
