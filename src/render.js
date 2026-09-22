@@ -10,7 +10,12 @@ import { layout } from './layout.js';
 import { getWidget } from './widgets/index.js';
 
 function buildSvg({ view, width, height, padding, gap }) {
-  const area = { x: padding, y: padding, w: width - padding * 2, h: height - padding * 2 };
+  const area = {
+    x: padding.left,
+    y: padding.top,
+    w: width - padding.left - padding.right,
+    h: height - padding.top - padding.bottom,
+  };
   const body = layout(view.columns, area, gap)
     .map(({ item, ...box }) => getWidget(item.type).render(item.model, box))
     .join('');

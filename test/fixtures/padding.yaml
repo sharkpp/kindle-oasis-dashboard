@@ -1,0 +1,8 @@
+timezone: Asia/Tokyo
+padding:
+  bottom: 60
+  right: 20
+  left: 20
+columns:
+  - items:
+      - type: clock

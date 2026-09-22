@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
+import sharp from 'sharp';
 import { loadConfig } from '../src/config.js';
 import { Dashboard } from '../src/dashboard.js';
 import { parseIcs } from '../src/sources/calendar.js';
@@ -12,10 +13,11 @@ const TZ = 'Asia/Tokyo';
 const NOW = new Date('2026-09-22T05:00:00.000Z');
 
 const fixture = (name) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');
+const configPath = (name = '../config.example.yaml') => new URL(name, import.meta.url).pathname;
 
 /** 実際の取得はせず、固定データを入れたダッシュボードを作る。 */
 function dashboardWithFixtures() {
-  const config = loadConfig(new URL('../config.example.yaml', import.meta.url).pathname);
+  const config = loadConfig(configPath());
   const dashboard = new Dashboard(config);
   dashboard.feeds.piyolog.data = parseFeed(fixture('piyolog.json'));
   dashboard.feeds.piyolog.nextAttemptAt = Infinity;
@@ -24,22 +26,36 @@ function dashboardWithFixtures() {
   return dashboard;
 }
 
+/** 描画に渡す共通の引数。 */
+const renderOptions = (dashboard) => ({
+  view: dashboard.view,
+  width: 1264,
+  height: 1593,
+  padding: dashboard.config.padding,
+  gap: dashboard.config.gap,
+});
+
 /** 種類で項目を探す。 */
 const findItem = (view, type) =>
   view.columns.flatMap((column) => column.items).find((item) => item.type === type).model;
 
 test('config.example.yaml が読める', () => {
-  const config = loadConfig(new URL('../config.example.yaml', import.meta.url).pathname);
+  const config = loadConfig(configPath());
   assert.equal(config.timezone, TZ);
   assert.equal(config.columns.length, 2);
   assert.equal(config.sources.piyolog.intervalSec, 300);
+  // 数値ひとつの余白は四辺に広がる。
+  assert.deepEqual(config.padding, { top: 28, right: 28, bottom: 28, left: 28 });
+});
+
+test('余白は辺ごとに指定できる', () => {
+  const config = loadConfig(configPath('./fixtures/padding.yaml'));
+  // 端末で切れる分を詰めるための指定。書かなかった辺は既定値のまま。
+  assert.deepEqual(config.padding, { top: 24, right: 20, bottom: 60, left: 20 });
 });
 
 test('設定の誤りは項目名つきで知らせる', () => {
-  assert.throws(
-    () => loadConfig(new URL('./fixtures/broken.yaml', import.meta.url).pathname),
-    /columns\[0\]\.items\[0\]\.times\[1\]/
-  );
+  assert.throws(() => loadConfig(configPath('./fixtures/broken.yaml')), /columns\[0\]\.items\[0\]\.times\[1\]/);
 });
 
 test('ぴよログのフィードを読む', () => {
@@ -95,7 +111,7 @@ test('つぎの予定は日付の近いものから', async () => {
 });
 
 test('ぴよログが取れていなければ項目に理由を出す', async () => {
-  const config = loadConfig(new URL('../config.example.yaml', import.meta.url).pathname);
+  const config = loadConfig(configPath());
   const dashboard = new Dashboard(config);
   for (const feed of Object.values(dashboard.feeds)) {
     feed.nextAttemptAt = Infinity;
@@ -121,13 +137,11 @@ test('表示内容が同じ間は版番号を上げない', async () => {
 test('画面をグレースケール PNG に描ける', async () => {
   const dashboard = dashboardWithFixtures();
   await dashboard.tick(NOW);
-  const png = await renderScreen({
-    view: dashboard.view,
-    width: 1264,
-    height: 1593,
-    padding: 28,
-    gap: 18,
-  });
-  assert.ok(png.length > 1000);
+  const png = await renderScreen(renderOptions(dashboard));
   assert.equal(png.subarray(1, 4).toString(), 'PNG');
+  const meta = await sharp(png).metadata();
+  assert.deepEqual([meta.format, meta.width, meta.height], ['png', 1264, 1593]);
+  // 16 色のパレット PNG。どの色も無彩色であることを確かめる。
+  const { channels } = await sharp(png).stats();
+  assert.ok(channels.every((channel) => channel.mean === channels[0].mean), 'グレースケール');
 });

@@ -23,6 +23,29 @@ function checkTimezone(timezone) {
   return timezone;
 }
 
+const DEFAULT_PADDING = 24;
+const EDGES = ['top', 'right', 'bottom', 'left'];
+
+/**
+ * 画面の外周の余白。数値ひとつなら四辺とも同じ、辺ごとに指定することもできる。
+ *
+ * 端末が返すビューポートと実際に見えている範囲がずれることがあるので、
+ * その分をここで詰める。値は回転後の「読む向き」での上下左右。
+ */
+function readPadding(raw, path) {
+  if (raw === undefined || raw === null || typeof raw === 'number') {
+    const all = asNumber(raw, path, { fallback: DEFAULT_PADDING, min: 0, max: 400 });
+    return Object.fromEntries(EDGES.map((edge) => [edge, all]));
+  }
+  const edges = asObject(raw, path);
+  return Object.fromEntries(
+    EDGES.map((edge) => [
+      edge,
+      asNumber(edges[edge], `${path}.${edge}`, { fallback: DEFAULT_PADDING, min: 0, max: 400 }),
+    ])
+  );
+}
+
 function readSource(raw, path, minIntervalSec, defaultIntervalSec) {
   if (raw === undefined || raw === null) return null;
   const source = asObject(raw, path);
@@ -72,7 +95,7 @@ export function loadConfig(path) {
     timezone: checkTimezone(asString(root.timezone, 'timezone', { fallback: 'Asia/Tokyo' })),
     pollSec: asNumber(root.poll_sec, 'poll_sec', { fallback: 10, min: 1, max: 600 }),
     tickSec: asNumber(root.tick_sec, 'tick_sec', { fallback: 20, min: 1, max: 600 }),
-    padding: asNumber(root.padding, 'padding', { fallback: 24, min: 0, max: 200 }),
+    padding: readPadding(root.padding, 'padding'),
     gap: asNumber(root.gap, 'gap', { fallback: 16, min: 0, max: 200 }),
     sources: {
       piyolog: readSource(sources.piyolog, 'sources.piyolog', MIN_PIYOLOG_INTERVAL_SEC, 300),
