@@ -137,11 +137,29 @@ test('表示内容が同じ間は版番号を上げない', async () => {
 test('画面をグレースケール PNG に描ける', async () => {
   const dashboard = dashboardWithFixtures();
   await dashboard.tick(NOW);
-  const png = await renderScreen(renderOptions(dashboard));
+  const png = await renderScreen({ ...renderOptions(dashboard), orientation: 'portrait' });
   assert.equal(png.subarray(1, 4).toString(), 'PNG');
   const meta = await sharp(png).metadata();
   assert.deepEqual([meta.format, meta.width, meta.height], ['png', 1264, 1593]);
   // 16 色のパレット PNG。どの色も無彩色であることを確かめる。
   const { channels } = await sharp(png).stats();
   assert.ok(channels.every((channel) => channel.mean === channels[0].mean), 'グレースケール');
+});
+
+test('横向きの指定では縦横を入れ替えて描いてから回す', async () => {
+  const dashboard = dashboardWithFixtures();
+  await dashboard.tick(NOW);
+  const rendered = {};
+  for (const orientation of ['portrait', 'landscape', 'portrait-reverse', 'landscape-reverse']) {
+    rendered[orientation] = await renderScreen({ ...renderOptions(dashboard), orientation });
+    const meta = await sharp(rendered[orientation]).metadata();
+    // どの向きでも、出来上がる画像は端末のビューポートちょうど。
+    assert.deepEqual([meta.width, meta.height], [1264, 1593], orientation);
+  }
+  const images = Object.values(rendered);
+  for (let i = 0; i < images.length; i += 1) {
+    for (let j = i + 1; j < images.length; j += 1) {
+      assert.ok(!images[i].equals(images[j]), '向きごとに違う絵になる');
+    }
+  }
 });

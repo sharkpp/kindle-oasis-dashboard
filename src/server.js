@@ -1,26 +1,60 @@
 import http from 'node:http';
 import os from 'node:os';
 import process from 'node:process';
+import { parseArgs } from 'node:util';
 import { ConfigError, loadConfig } from './config.js';
 import { Dashboard } from './dashboard.js';
-import { renderScreen } from './render.js';
+import { ORIENTATIONS, renderScreen } from './render.js';
 import { renderPage } from './page.js';
 
-const PORT = Number(process.env.PORT ?? 3000);
-const CONFIG_PATH = process.env.CONFIG ?? 'config.yaml';
+const USAGE = `使い方: npm start -- [オプション]
 
-/** 初回の HTML を描くときの想定サイズ（Kindle Oasis 第9世代のパネル解像度）。 */
-const DEFAULT_VIEWPORT = { width: 1264, height: 1680 };
+  -c, --config <path>        設定ファイル（既定: config.yaml）
+  -p, --port <number>        待ち受けポート（既定: 3000）
+  -o, --orientation <name>   端末の置き方（既定: portrait）
+                             ${ORIENTATIONS.join(' / ')}
+      --markers              四隅に位置合わせマーカーと画像サイズを描く
+  -h, --help                 この使い方を表示する
+`;
 
-let config;
+function parseOptions() {
+  const { values } = parseArgs({
+    options: {
+      config: { type: 'string', short: 'c', default: 'config.yaml' },
+      port: { type: 'string', short: 'p', default: '3000' },
+      orientation: { type: 'string', short: 'o', default: 'portrait' },
+      markers: { type: 'boolean', default: false },
+      help: { type: 'boolean', short: 'h', default: false },
+    },
+  });
+  if (values.help) {
+    process.stdout.write(USAGE);
+    process.exit(0);
+  }
+  const port = Number(values.port);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(`--port が正しくありません: ${values.port}`);
+  }
+  if (!ORIENTATIONS.includes(values.orientation)) {
+    throw new Error(
+      `--orientation が正しくありません: ${values.orientation}（${ORIENTATIONS.join(' / ')}）`
+    );
+  }
+  return { ...values, port };
+}
+
+let options;
+let dashboard;
 try {
-  config = loadConfig(CONFIG_PATH);
+  options = parseOptions();
+  dashboard = new Dashboard(loadConfig(options.config));
 } catch (err) {
-  console.error(err instanceof ConfigError ? `設定エラー — ${err.message}` : err);
+  console.error(err instanceof ConfigError ? `設定エラー — ${err.message}` : err.message);
   process.exit(1);
 }
 
-const dashboard = new Dashboard(config);
+/** 初回の HTML を描くときの想定サイズ（Kindle Oasis 第9世代のパネル解像度）。 */
+const DEFAULT_VIEWPORT = { width: 1264, height: 1680 };
 /** クライアントが実測したビューポート。次の HTML 生成に使う。 */
 let viewport = { ...DEFAULT_VIEWPORT };
 
@@ -47,6 +81,8 @@ function recordViewport(params) {
 }
 
 async function handle(req, res, url) {
+  const config = dashboard.config;
+
   if (url.pathname === '/' || url.pathname === '/index.html') {
     const body = renderPage({
       width: viewport.width,
@@ -78,6 +114,8 @@ async function handle(req, res, url) {
       height: clampSize(url.searchParams.get('h'), DEFAULT_VIEWPORT.height),
       padding: config.padding,
       gap: config.gap,
+      orientation: options.orientation,
+      showMarkers: options.markers,
     });
     noStore(res);
     res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': png.length });
@@ -112,15 +150,18 @@ function lanAddresses() {
 // 表示内容が変わったときだけ版番号が上がる。クライアントはそれを見て画像を取り直す。
 const tick = setInterval(() => {
   dashboard.tick().catch((err) => console.error(err));
-}, config.tickSec * 1000);
+}, dashboard.config.tickSec * 1000);
 tick.unref();
 
 // 最初の取得は待たずに待ち受けを始める。取得中であることは画面の各項目が出す。
 dashboard.tick().catch((err) => console.error(err));
 
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`MyRealDashboard — 設定 ${CONFIG_PATH} / ${config.tickSec} 秒ごとに更新 / ${config.pollSec} 秒ごとにポーリング`);
+server.listen(options.port, '0.0.0.0', () => {
+  console.log(
+    `MyRealDashboard — 設定 ${options.config} / ${options.orientation}` +
+      (options.markers ? ' / 位置合わせマーカーあり' : '')
+  );
   for (const address of ['localhost', ...lanAddresses()]) {
-    console.log(`  http://${address}:${PORT}/`);
+    console.log(`  http://${address}:${options.port}/`);
   }
 });
