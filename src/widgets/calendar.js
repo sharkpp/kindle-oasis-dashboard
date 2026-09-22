@@ -8,9 +8,35 @@
 import { MONO, SANS, ellipsize, fitSize, text, textWidth } from '../svg.js';
 import { dayDiff, formatClock, formatShortDate } from '../time.js';
 import { SUB_INK, footer, header, inset, unavailable } from './common.js';
-import { asNumber, asSourceNames, asString } from '../validate.js';
+import { asNumber, asSourceNames, asString, reject } from '../validate.js';
 
 export const type = 'calendar';
+
+/** ワイルドカード（`*` と `?`）を正規表現にする。全体が一致したときだけ通す。 */
+function globToRegExp(pattern) {
+  const body = [...pattern]
+    .map((ch) => (ch === '*' ? '.*' : ch === '?' ? '.' : ch.replace(/[.+^${}()|[\]\\]/g, '\\$&')))
+    .join('');
+  return new RegExp(`^${body}$`);
+}
+
+/**
+ * 件名の絞り込み。`/.../` で囲めば正規表現、そうでなければワイルドカード。
+ * 比較に使う正規表現と、書かれたままの文字列の両方を持つ（設定の差分検知に使う）。
+ */
+function readMatch(raw, path) {
+  if (raw === undefined || raw === null) return null;
+  const pattern = asString(raw, path);
+  const asRegExp = /^\/(.*)\/([a-z]*)$/s.exec(pattern);
+  try {
+    return {
+      pattern,
+      regexp: asRegExp ? new RegExp(asRegExp[1], asRegExp[2]) : globToRegExp(pattern),
+    };
+  } catch (err) {
+    return reject(path, `正規表現として読めません — ${err.message}`);
+  }
+}
 
 export function normalize(item, path, sources) {
   // どのカレンダーを見るか。省略すれば最初に定義されているもの。
@@ -23,6 +49,7 @@ export function normalize(item, path, sources) {
     label: asString(item.label, `${path}.label`, { fallback: '' }),
     count: asNumber(item.count, `${path}.count`, { fallback: 3, min: 1, max: 10, integer: true }),
     sources: names,
+    match: readMatch(item.match, `${path}.match`),
   };
 }
 
@@ -48,6 +75,7 @@ export function build(options, ctx) {
   const entries = feeds
     .flatMap((feed) => feed.data?.events ?? [])
     .filter((event) => event.end > ctx.now)
+    .filter((event) => !options.match || options.match.regexp.test(event.summary ?? ''))
     .sort((a, b) => a.start - b.start)
     .slice(0, options.count)
     .map((event) => ({

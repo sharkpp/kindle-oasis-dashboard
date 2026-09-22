@@ -40,6 +40,16 @@ const DEFINED_SOURCES = {
   ほいくえん: { type: 'calendar' },
 };
 
+/** カレンダー項目に渡す、取得済みの状態。 */
+const calendarContext = () => ({
+  now: NOW,
+  timezone: TZ,
+  sources: {
+    かぞく: { data: FEED_FIXTURES['かぞく'](), error: null, ageMs: 0 },
+    ほいくえん: { data: FEED_FIXTURES['ほいくえん'](), error: null, ageMs: 0 },
+  },
+});
+
 /** 描画に渡す共通の引数。 */
 const renderOptions = (dashboard) => ({
   view: dashboard.view,
@@ -133,6 +143,32 @@ test('つぎの予定は、複数のカレンダーをまとめて日付の近�
     { when: '9/25(金) 09:30', summary: 'けんしん', now: false },
     { when: '9/29(火) 11:00', summary: 'リトミック教室 (時間変更)', now: false },
   ]);
+});
+
+test('カレンダーはワイルドカードで件名を絞り込める', () => {
+  const options = calendarWidget.normalize(
+    { type: 'calendar', count: 10, sources: ['かぞく', 'ほいくえん'], match: '*けんしん*' },
+    'columns[0].items[0]',
+    DEFINED_SOURCES
+  );
+  const model = calendarWidget.build(options, calendarContext());
+  assert.deepEqual(
+    model.entries.map((entry) => entry.summary),
+    ['けんしん']
+  );
+});
+
+test('カレンダーは正規表現でも件名を絞り込める', () => {
+  const options = calendarWidget.normalize(
+    { type: 'calendar', count: 10, sources: ['かぞく', 'ほいくえん'], match: '/^リトミック/' },
+    'columns[0].items[0]',
+    DEFINED_SOURCES
+  );
+  const model = calendarWidget.build(options, calendarContext());
+  assert.deepEqual(
+    model.entries.map((entry) => entry.summary),
+    ['リトミック教室 (時間変更)', 'リトミック教室', 'リトミック教室', 'リトミック教室']
+  );
 });
 
 test('取得元の指定が間違っていれば起動前に分かる', () => {
