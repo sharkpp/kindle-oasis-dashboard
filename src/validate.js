@@ -61,3 +61,31 @@ export function asEnum(value, path, allowed, fallback) {
 export function reject(path, message) {
   fail(path, message);
 }
+
+/**
+ * 項目が使う取得元の名前を解決する。
+ *
+ * 省略されたときは、その種別で最初に定義されている取得元を選ぶ。
+ * 種別の取得元が 1 つも無ければ空を返し、項目側でその旨を表示する。
+ *
+ * @param {unknown} value 設定に書かれた名前。文字列、または `multiple` なら配列
+ * @param {Record<string, {type: string}>} sources 定義されている取得元
+ * @param {string} type 求める種別
+ */
+export function asSourceNames(value, path, { sources, type, multiple = false }) {
+  const available = Object.keys(sources).filter((name) => sources[name].type === type);
+  if (value === undefined || value === null) return available.slice(0, 1);
+
+  if (Array.isArray(value) && !multiple) fail(path, '取得元の名前をひとつだけ指定してください');
+  const names = Array.isArray(value) ? asArray(value, path, { min: 1 }) : [value];
+
+  return names.map((name, i) => {
+    const at = Array.isArray(value) ? `${path}[${i}]` : path;
+    const resolved = asString(name, at);
+    if (!sources[resolved]) fail(at, `そのような取得元はありません: ${resolved}`);
+    if (sources[resolved].type !== type) {
+      fail(at, `${resolved} は ${sources[resolved].type} です。${type} の取得元を指定してください`);
+    }
+    return resolved;
+  });
+}

@@ -35,8 +35,8 @@ export function parseFeed(body) {
   return { generatedAt: new Date(json.generated_at), records };
 }
 
-export function createPiyologFeed({ url, intervalSec }) {
-  return new CachedFeed({ name: 'ぴよログ', url, intervalSec, parse: parseFeed });
+export function createPiyologFeed({ name, url, intervalSec }) {
+  return new CachedFeed({ name, url, intervalSec, parse: parseFeed });
 }
 
 /** 指定した種類のうち、いちばん新しい記録。無ければ null。 */

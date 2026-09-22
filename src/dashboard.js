@@ -5,32 +5,16 @@
  * 作った内容が前回と一字一句同じなら版番号を上げない。電子ペーパーの書き換えは
  * 見た目が変わるときだけで足りる。
  *
+ * フィードは取得元の名前で持つ。同じ種別の取得元がいくつあっても、それぞれ別の
+ * キャッシュになる。
+ *
  * 設定は動いたまま差し替えられる。差し替えでは取得元ごとに新旧を比べ、
  * 実際に変わった取得元だけを作り直す。変わっていない取得元のキャッシュは残るので、
  * レイアウトを直しただけで外部へ取りに行くことはない。
  */
 
-import { createCalendarFeed } from './sources/calendar.js';
-import { createPiyologFeed } from './sources/piyolog.js';
+import { SOURCE_KINDS } from './sources/index.js';
 import { getWidget } from './widgets/index.js';
-
-/**
- * 取得元の定義。`args` はフィードを作るための引数で、これが変われば作り直す。
- */
-const SOURCES = {
-  piyolog: {
-    label: 'ぴよログ',
-    create: createPiyologFeed,
-    args: (config) => config.sources.piyolog && { ...config.sources.piyolog },
-  },
-  calendar: {
-    label: 'カレンダー',
-    create: createCalendarFeed,
-    // 解釈にタイムゾーンを使うので、タイムゾーンが変われば取り直す。
-    args: (config) =>
-      config.sources.calendar && { ...config.sources.calendar, timezone: config.timezone },
-  },
-};
 
 export class Dashboard {
   constructor(config) {
@@ -56,23 +40,26 @@ export class Dashboard {
     return changes;
   }
 
-  /** 取得元の設定が変わったフィードだけを作り直す。 */
+  /** 設定の変わった取得元だけを作り直す。 */
   #syncFeeds(config) {
     const changes = [];
-    for (const [name, source] of Object.entries(SOURCES)) {
-      const args = source.args(config);
-      const key = args ? JSON.stringify(args) : null;
+    const names = new Set([...Object.keys(this.feeds), ...Object.keys(config.sources)]);
+
+    for (const name of names) {
+      const source = config.sources[name];
+      const kind = source && SOURCE_KINDS[source.type];
+      const key = kind ? JSON.stringify(kind.args(source, config)) : null;
       if (key === (this.feedKeys[name] ?? null)) continue;
 
       const had = Boolean(this.feeds[name]);
-      if (args) {
-        this.feeds[name] = source.create(args);
+      if (kind) {
+        this.feeds[name] = kind.create(kind.args(source, config));
         this.feedKeys[name] = key;
-        changes.push(`${source.label}: ${had ? '取得元が変わったので取り直す' : '取得元を設定'}`);
+        changes.push(`${name}: ${had ? '取得元が変わったので取り直す' : `取得元を設定 (${kind.label})`}`);
       } else {
         delete this.feeds[name];
         delete this.feedKeys[name];
-        changes.push(`${source.label}: 取得元の設定を外した`);
+        changes.push(`${name}: 取得元の設定を外した`);
       }
     }
     return changes;

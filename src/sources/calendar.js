@@ -79,9 +79,9 @@ export function parseIcs(body, { timezone, from = new Date() }) {
   return { events };
 }
 
-export function createCalendarFeed({ url, intervalSec, timezone }) {
+export function createCalendarFeed({ name, url, intervalSec, timezone }) {
   return new CachedFeed({
-    name: 'カレンダー',
+    name,
     url,
     intervalSec,
     parse: (body) => parseIcs(body, { timezone }),

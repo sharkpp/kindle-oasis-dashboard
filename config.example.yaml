@@ -18,18 +18,28 @@ padding: 28
 # 項目どうしのすき間（px）。
 gap: 18
 
+# 取得元。名前は自由に付けられる。type で種別を選ぶので、同じ種別をいくつでも
+# 定義できる（子供が 2 人ならぴよログを 2 つ、カレンダーも家族用と保育園用で分ける）。
+# 項目からはこの名前で指す。
 sources:
   # ぴよログ データフィード。アプリの設定 → データフィード で発行した URL。
   # 同じ URL への取得は 1 分に 1 回までが目安。取得期間ごとのキャッシュ保持時間
   # （24h: 1 分 / 3d: 2 分 / 7d: 5 分 / 28d: 15 分）以上の間隔を空ける。
-  piyolog:
+  ぴよログ:
+    type: piyolog
     url: "https://feed.piyolog.com/v1/feed/24h/FEED_ID/SECRET"
     interval_sec: 300
 
   # Google カレンダーの「iCal 形式の非公開 URL」。
   # カレンダーの設定 → カレンダーの統合 からコピーする。
-  calendar:
+  かぞく:
+    type: calendar
     url: "https://calendar.google.com/calendar/ical/xxxxxxxx%40group.calendar.google.com/private-yyyyyyyy/basic.ics"
+    interval_sec: 600
+
+  ほいくえん:
+    type: calendar
+    url: "https://calendar.google.com/calendar/ical/zzzzzzzz%40group.calendar.google.com/private-wwwwwwww/basic.ics"
     interval_sec: 600
 
 # 画面はカラムに横分割し、各カラムの中で項目を縦に積む。
@@ -59,6 +69,8 @@ columns:
 
       - type: milk
         height: 3
+        # どのぴよログを見るか。省略すれば最初に定義したもの。
+        source: ぴよログ
         # 前回の記録から何分後を目標にするか。
         interval_min: 180
         # 対象にするぴよログの記録種別。Formula=ミルク, BreastFeeding=母乳。
@@ -73,6 +85,8 @@ columns:
       - type: calendar
         height: 6
         count: 5
+        # どのカレンダーを見るか。省略すれば最初に定義したもの。
+        sources: かぞく
 
       - type: section
         height: 0.8

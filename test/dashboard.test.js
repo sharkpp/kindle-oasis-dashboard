@@ -7,6 +7,7 @@ import { Dashboard } from '../src/dashboard.js';
 import { parseIcs } from '../src/sources/calendar.js';
 import { parseFeed } from '../src/sources/piyolog.js';
 import { renderScreen } from '../src/render.js';
+import * as calendarWidget from '../src/widgets/calendar.js';
 
 const TZ = 'Asia/Tokyo';
 /** 2026-09-22 (火) 14:00 JST。固定した「いま」。 */
@@ -15,16 +16,28 @@ const NOW = new Date('2026-09-22T05:00:00.000Z');
 const fixture = (name) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');
 const configPath = (name = '../config.example.yaml') => new URL(name, import.meta.url).pathname;
 
+const FEED_FIXTURES = {
+  ぴよログ: () => parseFeed(fixture('piyolog.json')),
+  かぞく: () => parseIcs(fixture('calendar.ics'), { timezone: TZ, from: NOW }),
+  ほいくえん: () => parseIcs(fixture('calendar2.ics'), { timezone: TZ, from: NOW }),
+};
+
 /** 実際の取得はせず、固定データを入れたダッシュボードを作る。 */
-function dashboardWithFixtures() {
-  const config = loadConfig(configPath());
+function dashboardWithFixtures(config = loadConfig(configPath())) {
   const dashboard = new Dashboard(config);
-  dashboard.feeds.piyolog.data = parseFeed(fixture('piyolog.json'));
-  dashboard.feeds.piyolog.nextAttemptAt = Infinity;
-  dashboard.feeds.calendar.data = parseIcs(fixture('calendar.ics'), { timezone: TZ, from: NOW });
-  dashboard.feeds.calendar.nextAttemptAt = Infinity;
+  for (const [name, feed] of Object.entries(dashboard.feeds)) {
+    feed.data = FEED_FIXTURES[name]();
+    feed.nextAttemptAt = Infinity;
+  }
   return dashboard;
 }
+
+/** 項目の検証に渡す、定義済みの取得元。 */
+const DEFINED_SOURCES = {
+  ぴよログ: { type: 'piyolog' },
+  かぞく: { type: 'calendar' },
+  ほいくえん: { type: 'calendar' },
+};
 
 /** 描画に渡す共通の引数。 */
 const renderOptions = (dashboard) => ({
@@ -43,7 +56,8 @@ test('config.example.yaml が読める', () => {
   const config = loadConfig(configPath());
   assert.equal(config.timezone, TZ);
   assert.equal(config.columns.length, 2);
-  assert.equal(config.sources.piyolog.intervalSec, 300);
+  assert.deepEqual(Object.keys(config.sources), ['ぴよログ', 'かぞく', 'ほいくえん']);
+  assert.equal(config.sources['ぴよログ'].intervalSec, 300);
   // 数値ひとつの余白は四辺に広がる。
   assert.deepEqual(config.padding, { top: 28, right: 28, bottom: 28, left: 28 });
 });
@@ -88,6 +102,14 @@ test('つぎのごはんは今より後でいちばん近い時刻', async () =>
   assert.equal(model.note, 'おやつ');
 });
 
+test('同じ種別の取得元をいくつでも持てる', () => {
+  const dashboard = dashboardWithFixtures();
+  assert.deepEqual(Object.keys(dashboard.feeds), ['ぴよログ', 'かぞく', 'ほいくえん']);
+  // 同じ種別でも、取得元ごとに別のキャッシュになる。
+  assert.notEqual(dashboard.feeds['かぞく'], dashboard.feeds['ほいくえん']);
+  assert.notEqual(dashboard.feeds['かぞく'].data, dashboard.feeds['ほいくえん'].data);
+});
+
 test('つぎのミルクは前回の記録から指定時間後', async () => {
   const dashboard = dashboardWithFixtures();
   await dashboard.tick(NOW);
@@ -102,12 +124,25 @@ test('つぎの予定は日付の近いものから', async () => {
   const dashboard = dashboardWithFixtures();
   await dashboard.tick(NOW);
   const model = findItem(dashboard.view, 'calendar');
-  assert.equal(model.entries.length, 5);
-  assert.deepEqual(model.entries.slice(0, 3), [
+  assert.deepEqual(model.entries, [
     { when: '15:30', summary: 'こどもクリニック 予防接種', now: false },
     { when: 'あす 終日', summary: 'えんそく', now: false },
     { when: '9/29(火) 11:00', summary: 'リトミック教室 (時間変更)', now: false },
+    { when: '10/6(火) 10:00', summary: 'リトミック教室', now: false },
+    { when: '10/13(火) 10:00', summary: 'リトミック教室', now: false },
   ]);
+});
+
+test('取得元の指定が間違っていれば起動前に分かる', () => {
+  const at = 'columns[0].items[0]';
+  assert.throws(
+    () => calendarWidget.normalize({ type: 'calendar', sources: 'よその' }, at, DEFINED_SOURCES),
+    /そのような取得元はありません: よその/
+  );
+  assert.throws(
+    () => calendarWidget.normalize({ type: 'calendar', sources: 'ぴよログ' }, at, DEFINED_SOURCES),
+    /calendar の取得元を指定してください/
+  );
 });
 
 test('ぴよログが取れていなければ項目に理由を出す', async () => {
@@ -174,9 +209,9 @@ test('設定を読み直しても、取得元が同じならキャッシュを�
   const changes = dashboard.applyConfig(next, NOW);
 
   assert.deepEqual(changes, ['レイアウト']);
-  assert.equal(dashboard.feeds.piyolog, feeds.piyolog, '同じフィードを使い続ける');
-  assert.equal(dashboard.feeds.calendar, feeds.calendar);
-  assert.ok(dashboard.feeds.piyolog.data, '取り込み済みの内容が残る');
+  assert.equal(dashboard.feeds['ぴよログ'], feeds['ぴよログ'], '同じフィードを使い続ける');
+  assert.equal(dashboard.feeds['かぞく'], feeds['かぞく']);
+  assert.ok(dashboard.feeds['ぴよログ'].data, '取り込み済みの内容が残る');
 });
 
 test('取得元が変われば、そのフィードだけ作り直す', async () => {
@@ -185,14 +220,13 @@ test('取得元が変われば、そのフィードだけ作り直す', async ()
   const feeds = { ...dashboard.feeds };
 
   const next = loadConfig(configPath());
-  next.sources.piyolog.interval_sec = undefined;
-  next.sources.piyolog.url = 'https://feed.piyolog.com/v1/feed/24h/OTHER/SECRET';
+  next.sources['ぴよログ'].url = 'https://feed.piyolog.com/v1/feed/24h/OTHER/SECRET';
   const changes = dashboard.applyConfig(next, NOW);
 
   assert.deepEqual(changes, ['ぴよログ: 取得元が変わったので取り直す']);
-  assert.notEqual(dashboard.feeds.piyolog, feeds.piyolog);
-  assert.equal(dashboard.feeds.piyolog.data, null, '新しい取得元のキャッシュは空から始まる');
-  assert.equal(dashboard.feeds.calendar, feeds.calendar, '変えていない取得元は触らない');
+  assert.notEqual(dashboard.feeds['ぴよログ'], feeds['ぴよログ']);
+  assert.equal(dashboard.feeds['ぴよログ'].data, null, '新しい取得元のキャッシュは空から始まる');
+  assert.equal(dashboard.feeds['かぞく'], feeds['かぞく'], '変えていない取得元は触らない');
 });
 
 test('タイムゾーンを変えるとカレンダーだけ作り直す', async () => {
@@ -205,9 +239,13 @@ test('タイムゾーンを変えるとカレンダーだけ作り直す', async
   const changes = dashboard.applyConfig(next, NOW);
 
   // 終日の予定の解釈にタイムゾーンを使うので、カレンダーは読み直す必要がある。
-  assert.deepEqual(changes, ['カレンダー: 取得元が変わったので取り直す', 'タイムゾーン: Asia/Seoul']);
-  assert.equal(dashboard.feeds.piyolog, feeds.piyolog);
-  assert.notEqual(dashboard.feeds.calendar, feeds.calendar);
+  assert.deepEqual(changes, [
+    'かぞく: 取得元が変わったので取り直す',
+    'ほいくえん: 取得元が変わったので取り直す',
+    'タイムゾーン: Asia/Seoul',
+  ]);
+  assert.equal(dashboard.feeds['ぴよログ'], feeds['ぴよログ']);
+  assert.notEqual(dashboard.feeds['かぞく'], feeds['かぞく']);
 });
 
 test('取得元を外すとフィードごと消える', async () => {
@@ -215,10 +253,11 @@ test('取得元を外すとフィードごと消える', async () => {
   await dashboard.tick(NOW);
 
   const next = loadConfig(configPath());
-  next.sources.piyolog = null;
+  delete next.sources['ぴよログ'];
   const changes = dashboard.applyConfig(next, NOW);
 
+  // 設定を読み直したのではなく直接外したので、項目が指す名前はそのまま残る。
   assert.deepEqual(changes, ['ぴよログ: 取得元の設定を外した']);
-  assert.equal(dashboard.feeds.piyolog, undefined);
+  assert.equal(dashboard.feeds['ぴよログ'], undefined);
   assert.equal(findItem(dashboard.view, 'milk').note, 'ぴよログの設定がありません');
 });

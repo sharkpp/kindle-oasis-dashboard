@@ -7,12 +7,9 @@
 
 import { readFileSync } from 'node:fs';
 import { parse } from 'yaml';
+import { SOURCE_KINDS, sourceKinds } from './sources/index.js';
 import { getWidget, widgetTypes } from './widgets/index.js';
 import { ConfigError, asArray, asNumber, asObject, asString, reject } from './validate.js';
-
-/** ぴよログの推奨は「同じ URL へ 1 分に 1 回程度まで」。 */
-const MIN_PIYOLOG_INTERVAL_SEC = 60;
-const MIN_CALENDAR_INTERVAL_SEC = 60;
 
 function checkTimezone(timezone) {
   try {
@@ -46,20 +43,39 @@ function readPadding(raw, path) {
   );
 }
 
-function readSource(raw, path, minIntervalSec, defaultIntervalSec) {
-  if (raw === undefined || raw === null) return null;
-  const source = asObject(raw, path);
-  return {
-    url: asString(source.url, `${path}.url`),
-    intervalSec: asNumber(source.interval_sec, `${path}.interval_sec`, {
-      fallback: defaultIntervalSec,
-      min: minIntervalSec,
-      max: 86400,
-    }),
-  };
+/**
+ * 取得元。名前を付けて `type` で種別を選ぶので、同じ種別をいくつでも定義できる。
+ */
+function readSources(raw, path) {
+  if (raw === undefined || raw === null) return {};
+  const sources = asObject(raw, path);
+  return Object.fromEntries(
+    Object.entries(sources).map(([name, value]) => {
+      const at = `${path}.${name}`;
+      const source = asObject(value, at);
+      const type = asString(source.type, `${at}.type`);
+      const kind = SOURCE_KINDS[type];
+      if (!kind) {
+        reject(`${at}.type`, `不明な取得元です: ${type}（使えるのは ${sourceKinds.join(' / ')}）`);
+      }
+      return [
+        name,
+        {
+          name,
+          type,
+          url: asString(source.url, `${at}.url`),
+          intervalSec: asNumber(source.interval_sec, `${at}.interval_sec`, {
+            fallback: kind.defaultIntervalSec,
+            min: kind.minIntervalSec,
+            max: 86400,
+          }),
+        },
+      ];
+    })
+  );
 }
 
-function readItem(raw, path) {
+function readItem(raw, path, sources) {
   const item = asObject(raw, path);
   const type = asString(item.type, `${path}.type`);
   const widget = getWidget(type);
@@ -67,16 +83,16 @@ function readItem(raw, path) {
   return {
     type,
     height: asNumber(item.height, `${path}.height`, { fallback: 1, min: 0.01, max: 100 }),
-    options: widget.normalize(item, path),
+    options: widget.normalize(item, path, sources),
   };
 }
 
-function readColumn(raw, path) {
+function readColumn(raw, path, sources) {
   const column = asObject(raw, path);
   return {
     width: asNumber(column.width, `${path}.width`, { fallback: 1, min: 0.01, max: 100 }),
     items: asArray(column.items, `${path}.items`, { min: 1 }).map((item, i) =>
-      readItem(item, `${path}.items[${i}]`)
+      readItem(item, `${path}.items[${i}]`, sources)
     ),
   };
 }
@@ -90,19 +106,17 @@ export function loadConfig(path) {
   }
   const root = asObject(raw, '設定');
 
-  const sources = root.sources ? asObject(root.sources, 'sources') : {};
+  // 項目は取得元を名前で指すので、取得元を先に読む。
+  const sources = readSources(root.sources, 'sources');
   return {
     timezone: checkTimezone(asString(root.timezone, 'timezone', { fallback: 'Asia/Tokyo' })),
     pollSec: asNumber(root.poll_sec, 'poll_sec', { fallback: 10, min: 1, max: 600 }),
     tickSec: asNumber(root.tick_sec, 'tick_sec', { fallback: 20, min: 1, max: 600 }),
     padding: readPadding(root.padding, 'padding'),
     gap: asNumber(root.gap, 'gap', { fallback: 16, min: 0, max: 200 }),
-    sources: {
-      piyolog: readSource(sources.piyolog, 'sources.piyolog', MIN_PIYOLOG_INTERVAL_SEC, 300),
-      calendar: readSource(sources.calendar, 'sources.calendar', MIN_CALENDAR_INTERVAL_SEC, 600),
-    },
+    sources,
     columns: asArray(root.columns, 'columns', { min: 1 }).map((column, i) =>
-      readColumn(column, `columns[${i}]`)
+      readColumn(column, `columns[${i}]`, sources)
     ),
   };
 }

@@ -7,14 +7,17 @@
 import { MONO, SANS, ellipsize, fitSize, text, textWidth } from '../svg.js';
 import { dayDiff, formatClock, formatShortDate } from '../time.js';
 import { SUB_INK, footer, header, inset, unavailable } from './common.js';
-import { asNumber, asString } from '../validate.js';
+import { asNumber, asSourceNames, asString } from '../validate.js';
 
 export const type = 'calendar';
 
-export function normalize(item, path) {
+export function normalize(item, path, sources) {
+  // どのカレンダーを見るか。省略すれば最初に定義されているもの。
+  const names = asSourceNames(item.sources, `${path}.sources`, { sources, type: 'calendar' });
   return {
     label: asString(item.label, `${path}.label`, { fallback: '' }),
     count: asNumber(item.count, `${path}.count`, { fallback: 3, min: 1, max: 10, integer: true }),
+    sources: names,
   };
 }
 
@@ -28,7 +31,7 @@ function whenLabel(event, now, timezone) {
 }
 
 export function build(options, ctx) {
-  const feed = ctx.sources.calendar;
+  const feed = ctx.sources[options.sources[0]];
   if (!feed) return { label: options.label, entries: [], note: 'カレンダーの設定がありません' };
   if (!feed.data) {
     return {
