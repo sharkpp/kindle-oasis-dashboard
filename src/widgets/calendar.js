@@ -2,6 +2,7 @@
  * 次の予定。Google カレンダーの iCal フィードから取得する。
  *
  * 進行中の予定も「いま」の欄として残し、その後に控えている予定を続ける。
+ * 取得元は複数指定でき、まとめて日付順に並べる。
  */
 
 import { MONO, SANS, ellipsize, fitSize, text, textWidth } from '../svg.js';
@@ -13,7 +14,11 @@ export const type = 'calendar';
 
 export function normalize(item, path, sources) {
   // どのカレンダーを見るか。省略すれば最初に定義されているもの。
-  const names = asSourceNames(item.sources, `${path}.sources`, { sources, type: 'calendar' });
+  const names = asSourceNames(item.sources, `${path}.sources`, {
+    sources,
+    type: 'calendar',
+    multiple: true,
+  });
   return {
     label: asString(item.label, `${path}.label`, { fallback: '' }),
     count: asNumber(item.count, `${path}.count`, { fallback: 3, min: 1, max: 10, integer: true }),
@@ -31,18 +36,19 @@ function whenLabel(event, now, timezone) {
 }
 
 export function build(options, ctx) {
-  const feed = ctx.sources[options.sources[0]];
-  if (!feed) return { label: options.label, entries: [], note: 'カレンダーの設定がありません' };
-  if (!feed.data) {
-    return {
-      label: options.label,
-      entries: [],
-      note: feed.error ? 'カレンダーを取得できません' : 'カレンダーを取得中',
-    };
-  }
+  const feeds = options.sources.map((name) => ctx.sources[name]).filter(Boolean);
+  if (feeds.length === 0) return { label: options.label, entries: [], note: 'カレンダーの設定がありません' };
 
-  const entries = feed.data.events
+  // まだ取れていない取得元があれば、一覧が欠けていることを伝える。
+  const pending = feeds.filter((feed) => !feed.data);
+  const pendingNote = pending.some((feed) => feed.error)
+    ? 'カレンダーを取得できません'
+    : 'カレンダーを取得中';
+
+  const entries = feeds
+    .flatMap((feed) => feed.data?.events ?? [])
     .filter((event) => event.end > ctx.now)
+    .sort((a, b) => a.start - b.start)
     .slice(0, options.count)
     .map((event) => ({
       when: whenLabel(event, ctx.now, ctx.timezone),
@@ -53,7 +59,7 @@ export function build(options, ctx) {
   return {
     label: options.label,
     entries,
-    note: entries.length === 0 ? 'この先の予定はありません' : '',
+    note: pending.length ? pendingNote : entries.length === 0 ? 'この先の予定はありません' : '',
   };
 }
 

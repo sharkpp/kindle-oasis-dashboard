@@ -86,7 +86,7 @@ columns:
         height: 6
         count: 5
         # どのカレンダーを見るか。省略すれば最初に定義したもの。
-        sources: かぞく
+        sources: [かぞく, ほいくえん]
 
       - type: section
         height: 0.8

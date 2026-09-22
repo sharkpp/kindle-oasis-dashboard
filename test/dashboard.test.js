@@ -120,27 +120,28 @@ test('つぎのミルクは前回の記録から指定時間後', async () => {
   assert.equal(model.note, '前回 12:15 · 140ml');
 });
 
-test('つぎの予定は日付の近いものから', async () => {
+test('つぎの予定は、複数のカレンダーをまとめて日付の近いものから', async () => {
   const dashboard = dashboardWithFixtures();
   await dashboard.tick(NOW);
   const model = findItem(dashboard.view, 'calendar');
+  // 「かぞく」と「ほいくえん」が混ざって時刻順に並ぶ。
   assert.deepEqual(model.entries, [
     { when: '15:30', summary: 'こどもクリニック 予防接種', now: false },
+    { when: '16:30', summary: 'おむかえ', now: false },
     { when: 'あす 終日', summary: 'えんそく', now: false },
+    { when: '9/25(金) 09:30', summary: 'けんしん', now: false },
     { when: '9/29(火) 11:00', summary: 'リトミック教室 (時間変更)', now: false },
-    { when: '10/6(火) 10:00', summary: 'リトミック教室', now: false },
-    { when: '10/13(火) 10:00', summary: 'リトミック教室', now: false },
   ]);
 });
 
 test('取得元の指定が間違っていれば起動前に分かる', () => {
   const at = 'columns[0].items[0]';
   assert.throws(
-    () => calendarWidget.normalize({ type: 'calendar', sources: 'よその' }, at, DEFINED_SOURCES),
+    () => calendarWidget.normalize({ type: 'calendar', sources: ['よその'] }, at, DEFINED_SOURCES),
     /そのような取得元はありません: よその/
   );
   assert.throws(
-    () => calendarWidget.normalize({ type: 'calendar', sources: 'ぴよログ' }, at, DEFINED_SOURCES),
+    () => calendarWidget.normalize({ type: 'calendar', sources: ['ぴよログ'] }, at, DEFINED_SOURCES),
     /calendar の取得元を指定してください/
   );
 });
