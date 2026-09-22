@@ -1,0 +1,84 @@
+# MyRealDashboard の設定。
+# これを config.yaml にコピーして、URL と時間を自分のものに置き換える。
+# フィードの URL は URL 自体が認証情報なので、config.yaml は公開しないこと。
+
+timezone: Asia/Tokyo
+
+# クライアントが更新を確認しに来る間隔（秒）。
+poll_sec: 10
+# 表示内容を作り直す間隔（秒）。内容が変わったときだけ画面を書き換える。
+tick_sec: 20
+
+# 画面の外周の余白と、項目どうしのすき間（px）。
+padding: 28
+gap: 18
+
+sources:
+  # ぴよログ データフィード。アプリの設定 → データフィード で発行した URL。
+  # 同じ URL への取得は 1 分に 1 回までが目安。取得期間ごとのキャッシュ保持時間
+  # （24h: 1 分 / 3d: 2 分 / 7d: 5 分 / 28d: 15 分）以上の間隔を空ける。
+  piyolog:
+    url: "https://feed.piyolog.com/v1/feed/24h/FEED_ID/SECRET"
+    interval_sec: 300
+
+  # Google カレンダーの「iCal 形式の非公開 URL」。
+  # カレンダーの設定 → カレンダーの統合 からコピーする。
+  calendar:
+    url: "https://calendar.google.com/calendar/ical/xxxxxxxx%40group.calendar.google.com/private-yyyyyyyy/basic.ics"
+    interval_sec: 600
+
+# 画面はカラムに横分割し、各カラムの中で項目を縦に積む。
+# width と height は比率。端末の画素数に合わせて引き伸ばされる。
+columns:
+  - width: 1
+    items:
+      - type: clock
+        height: 3
+        date: true
+
+      - type: section
+        height: 0.8
+        text: ごはん
+
+      - type: countdown
+        height: 3
+        times:
+          - { at: "07:30", name: あさごはん }
+          - { at: "12:00", name: おひるごはん }
+          - { at: "15:00", name: おやつ }
+          - { at: "18:00", name: ばんごはん }
+
+      - type: section
+        height: 0.8
+        text: ミルク
+
+      - type: milk
+        height: 3
+        # 前回の記録から何分後を目標にするか。
+        interval_min: 180
+        # 対象にするぴよログの記録種別。Formula=ミルク, BreastFeeding=母乳。
+        record_types: [Formula, BreastFeeding]
+
+  - width: 1
+    items:
+      - type: section
+        height: 0.8
+        text: きょうのよてい
+
+      - type: calendar
+        height: 6
+        count: 5
+
+      - type: section
+        height: 0.8
+        text: よる
+
+      - type: countdown
+        height: 2.5
+        label: おふろ
+        times: ["19:00"]
+
+      - type: countdown
+        height: 2.5
+        label: ねるじかん
+        times: ["20:30"]

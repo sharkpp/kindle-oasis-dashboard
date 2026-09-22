@@ -1,29 +1,28 @@
 import http from 'node:http';
 import os from 'node:os';
+import process from 'node:process';
+import { ConfigError, loadConfig } from './config.js';
+import { Dashboard } from './dashboard.js';
 import { renderScreen } from './render.js';
 import { renderPage } from './page.js';
 
 const PORT = Number(process.env.PORT ?? 3000);
-/** 画面の内容を新しくする間隔。これが変わるとクライアントが画像を取り直す。 */
-const UPDATE_SEC = Number(process.env.UPDATE_SEC ?? 30);
-/** クライアントが更新の有無を確認しに来る間隔。 */
-const POLL_SEC = Number(process.env.POLL_SEC ?? 5);
+const CONFIG_PATH = process.env.CONFIG ?? 'config.yaml';
 
+/** 初回の HTML を描くときの想定サイズ（Kindle Oasis 第9世代のパネル解像度）。 */
 const DEFAULT_VIEWPORT = { width: 1264, height: 1680 };
 
-const startedAt = Date.now();
-let screenCount = 0;
-let revision = 1;
+let config;
+try {
+  config = loadConfig(CONFIG_PATH);
+} catch (err) {
+  console.error(err instanceof ConfigError ? `設定エラー — ${err.message}` : err);
+  process.exit(1);
+}
 
-/** 直近にポーリングしてきたクライアントの状態。画像に描いて実機で確認する。 */
-let client = null;
+const dashboard = new Dashboard(config);
 /** クライアントが実測したビューポート。次の HTML 生成に使う。 */
 let viewport = { ...DEFAULT_VIEWPORT };
-
-const updateTimer = setInterval(() => {
-  revision += 1;
-}, UPDATE_SEC * 1000);
-updateTimer.unref();
 
 /** 端末がキャッシュを返さないよう、毎回すべての手段で無効化する。 */
 function noStore(res) {
@@ -37,24 +36,13 @@ function clampSize(value, fallback) {
   return Number.isFinite(n) && n >= 120 && n <= 4096 ? Math.round(n) : fallback;
 }
 
-function clampCount(value) {
-  const n = Number(value);
-  return Number.isFinite(n) && n >= 0 ? Math.round(n) : 0;
-}
-
-/** クライアントが URL に載せてきた稼働状況を取り込む。 */
-function recordClient(params) {
-  if (!params.has('polls')) return;
-  client = {
-    polls: clampCount(params.get('polls')),
-    errors: clampCount(params.get('errors')),
-    lastSeenAt: Date.now(),
-  };
+/** クライアントが URL に載せてきた実測ビューポートを取り込む。 */
+function recordViewport(params) {
   const width = clampSize(params.get('w'), 0);
   const height = clampSize(params.get('h'), 0);
   if (width && height && (viewport.width !== width || viewport.height !== height)) {
     viewport = { width, height };
-    console.log(`  -> viewport reported by client: ${width} x ${height} px`);
+    console.log(`ビューポート: ${width} x ${height} px`);
   }
 }
 
@@ -63,8 +51,8 @@ async function handle(req, res, url) {
     const body = renderPage({
       width: viewport.width,
       height: viewport.height,
-      revision,
-      pollSec: POLL_SEC,
+      revision: dashboard.revision,
+      pollSec: config.pollSec,
       token: Date.now(),
     });
     noStore(res);
@@ -74,8 +62,8 @@ async function handle(req, res, url) {
   }
 
   if (url.pathname === '/revision') {
-    recordClient(url.searchParams);
-    const body = String(revision);
+    recordViewport(url.searchParams);
+    const body = String(dashboard.revision);
     noStore(res);
     res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Content-Length': body.length });
     res.end(body);
@@ -83,20 +71,13 @@ async function handle(req, res, url) {
   }
 
   if (url.pathname === '/screen.png') {
-    recordClient(url.searchParams);
-    const width = clampSize(url.searchParams.get('w'), DEFAULT_VIEWPORT.width);
-    const height = clampSize(url.searchParams.get('h'), DEFAULT_VIEWPORT.height);
-    screenCount += 1;
+    recordViewport(url.searchParams);
     const png = await renderScreen({
-      width,
-      height,
-      now: new Date(),
-      count: screenCount,
-      revision,
-      updateSec: UPDATE_SEC,
-      pollSec: POLL_SEC,
-      uptimeMs: Date.now() - startedAt,
-      client: client && { ...client, lastSeenAgoMs: Date.now() - client.lastSeenAt },
+      view: dashboard.view,
+      width: clampSize(url.searchParams.get('w'), DEFAULT_VIEWPORT.width),
+      height: clampSize(url.searchParams.get('h'), DEFAULT_VIEWPORT.height),
+      padding: config.padding,
+      gap: config.gap,
     });
     noStore(res);
     res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': png.length });
@@ -112,9 +93,7 @@ const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host ?? 'localhost'}`);
   // ポーリングはログが流れやすいので、画面が変わるやり取りだけを残す。
   if (url.pathname !== '/revision') {
-    console.log(
-      `${new Date().toISOString()} ${req.method} ${req.url} ua="${req.headers['user-agent'] ?? '-'}"`
-    );
+    console.log(`${new Date().toISOString()} ${req.method} ${url.pathname}`);
   }
   handle(req, res, url).catch((err) => {
     console.error(err);
@@ -130,21 +109,18 @@ function lanAddresses() {
     .map((iface) => iface.address);
 }
 
+// 表示内容が変わったときだけ版番号が上がる。クライアントはそれを見て画像を取り直す。
+const tick = setInterval(() => {
+  dashboard.tick().catch((err) => console.error(err));
+}, config.tickSec * 1000);
+tick.unref();
+
+// 最初の取得は待たずに待ち受けを始める。取得中であることは画面の各項目が出す。
+dashboard.tick().catch((err) => console.error(err));
+
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`MyRealDashboard prototype — update every ${UPDATE_SEC}s, poll every ${POLL_SEC}s`);
-  console.log(`image size: ${viewport.width} x ${viewport.height} px (default)`);
+  console.log(`MyRealDashboard — 設定 ${CONFIG_PATH} / ${config.tickSec} 秒ごとに更新 / ${config.pollSec} 秒ごとにポーリング`);
   for (const address of ['localhost', ...lanAddresses()]) {
     console.log(`  http://${address}:${PORT}/`);
   }
 });
-
-// ポーリングが届いているかを定期的に知らせる。実機で JavaScript が動いたかの判断材料。
-const watchTimer = setInterval(() => {
-  const age = client ? Math.round((Date.now() - client.lastSeenAt) / 1000) : null;
-  console.log(
-    client
-      ? `client: poll #${client.polls}, errors ${client.errors}, last ${age}s ago, rev ${revision}`
-      : `client: no polling yet, rev ${revision}`
-  );
-}, Math.max(UPDATE_SEC, 30) * 1000);
-watchTimer.unref();
