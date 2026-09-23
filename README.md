@@ -181,6 +181,21 @@ columns:
 `Formula` = ミルク、`BreastFeeding` = 母乳、`ExpressedBreastMilk` = 搾母乳。
 目標を過ぎていれば、残り時間ではなく過ぎた時間を出す。
 
+#### `milk-total` — きょうのミルクの回数と量
+
+```yaml
+- type: milk-total
+  label: きょうのごうけい
+  source: ぴよログ
+  record_types: [Formula]
+```
+
+その日のミルクの回数と量の合計を出す。日の境目は `timezone` の 0 時。
+`source` と `record_types` の意味は `milk` と同じ。
+
+量が未入力の記録も回数には数え、合計からは外す。外した件数は補足に出る
+（ぴよログは未入力の数値を項目ごと省略するので、0 とは数えない）。
+
 #### `calendar` — 次の予定
 
 ```yaml
