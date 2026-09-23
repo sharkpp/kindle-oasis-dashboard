@@ -74,6 +74,21 @@ function dayEntry(days, date) {
   return day;
 }
 
+/** 6 時間ごとの降水確率の帯。 */
+function readBands(timeDefines, pops) {
+  return timeDefines
+    .map((at, i) => ({
+      date: dayOf(at),
+      hour: Number(at.slice(11, 13)),
+      // 次の帯までの長さ。最後の帯は 6 時間とみなす。
+      hours: timeDefines[i + 1]
+        ? Math.round((Date.parse(timeDefines[i + 1]) - Date.parse(at)) / 3600000)
+        : 6,
+      pop: toNumber(pops?.[i]),
+    }))
+    .filter((band) => band.pop !== null);
+}
+
 /**
  * 指定したコードの区域。コードを省いたら最初の区域。
  * 週間予報は短期予報より区域のくくりが粗く、同じコードが無いこともある
@@ -112,6 +127,7 @@ function parseForecast(json, { class10: subArea, amedas: tempArea }) {
 
   // 短期の降水確率は 6 時間ごと。その日のいちばん高い値を代表にする。
   const pops = pickArea(short.timeSeries[1], subArea, '降水確率');
+  const bands = readBands(short.timeSeries[1].timeDefines, pops.pops);
   short.timeSeries[1].timeDefines.forEach((at, i) => {
     const value = toNumber(pops.pops?.[i]);
     if (value === null) return;
@@ -161,6 +177,7 @@ function parseForecast(json, { class10: subArea, amedas: tempArea }) {
     reportedAt: new Date(short.reportDatetime),
     areaName: weather.area.name,
     days: [...days.values()].sort((a, b) => a.date.localeCompare(b.date)),
+    bands,
   };
 }
 

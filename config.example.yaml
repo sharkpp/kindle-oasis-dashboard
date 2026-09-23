@@ -116,6 +116,12 @@ columns:
         source: てんき
         days: 3
 
+      # 時間帯ごとの降水確率。気象庁が出しているいちばん細かい単位が 6 時間ごと。
+      - type: weather-timeline
+        height: 2.5
+        source: てんき
+        count: 4
+
       - type: section
         height: 0.8
         text: きょうのよてい

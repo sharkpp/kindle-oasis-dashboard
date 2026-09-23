@@ -11,6 +11,7 @@
   - [`milk-total` — きょうのミルクの回数と量](#milk-total--きょうのミルクの回数と量)
   - [`calendar` — 次の予定](#calendar--次の予定)
   - [`weather` — 今日・明日・明後日の天気](#weather--今日明日明後日の天気)
+  - [`weather-timeline` — 時間帯ごとの降水確率](#weather-timeline--時間帯ごとの降水確率)
   - [`weather-today` — 当日の天気を書式で](#weather-today--当日の天気を書式で)
   - [`clock` — 時間の表示](#clock--時間の表示)
   - [`section` — セクションタイトル](#section--セクションタイトル)
@@ -36,7 +37,7 @@
 | --- | --- | --- |
 | `milk` / `milk-total` | `piyolog` | `source: ぴよログ` |
 | `calendar` | `calendar` | `sources: [かぞく, ほいくえん]`（複数可） |
-| `weather` / `weather-today` | `weather` | `source: てんき` |
+| `weather` / `weather-timeline` / `weather-today` | `weather` | `source: てんき` |
 
 名前の間違いと種別の食い違いは設定の読み込み時に弾くので、起動前に分かる。
 取得元がまだ取れていないときは、その理由が項目の中に出る。
@@ -200,6 +201,29 @@ levels:
 
 降水確率はその日の 6 時間ごとの値のうち、いちばん高いものを出す。
 気温は「最低/最高」。値が無い日は `—` になる（17 時発表では当日の気温が落ちる）。
+
+## `weather-timeline` — 時間帯ごとの降水確率
+
+いまが入っている時間帯から先を、帯ごとに棒で並べる。
+
+| 項目 | 既定 | 内容 |
+| --- | --- | --- |
+| `count` | `4` | 出す帯の数（1〜12） |
+| `source` | 最初の `weather` | どの天気予報を見るか |
+
+```yaml
+- type: weather-timeline
+  height: 2.5
+  label: こうすいかくりつ
+  source: てんき
+  count: 4
+```
+
+気象庁は降水確率を **6 時間ごと**（00-06 / 06-12 / 12-18 / 18-24）で出している。
+1 時間ごとの天気や降水確率は、防災情報の JSON でも XML でも出していないので、
+これがいちばん細かい単位になる。
+
+今日の帯を出し切ると翌日の帯に続く。その帯には「あす」を添える。
 
 ## `weather-today` — 当日の天気を書式で
 

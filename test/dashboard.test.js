@@ -282,6 +282,18 @@ test('今日・明日・明後日の天気を並べる', async () => {
   ]);
 });
 
+test('時間帯は、いまが入っている帯から先を出す', async () => {
+  const dashboard = dashboardWithFixtures();
+  await dashboard.tick(NOW);
+  // 2026-09-22 14:00 なので、06-12 の帯は終わっている。
+  assert.deepEqual(findItem(dashboard.view, 'weather-timeline').bands, [
+    { time: '12-18', pop: 10 },
+    { time: '18-24', pop: 20 },
+    { time: 'あす 00-06', pop: 0 },
+    { time: 'あす 06-12', pop: 10 },
+  ]);
+});
+
 test('当日の天気を書式に沿って出す', async () => {
   const dashboard = dashboardWithFixtures();
   await dashboard.tick(NOW);
