@@ -62,29 +62,37 @@ export function render(model, box) {
   const columnWidth = area.w / model.columns.length;
   const totalWeight = ROWS.reduce((sum, row) => sum + row.weight, 0);
 
+  // 行の高さと、文字の大きさ。大きさは列ごとに変えず、いちばん長い表記に合わせて揃える。
+  let top = area.y;
+  const rows = ROWS.map((row) => {
+    const height = (area.h * row.weight) / totalWeight;
+    const size = Math.min(
+      height * 0.7,
+      ...model.columns.map((column) => fitSize(column[row.key], columnWidth * 0.88, height, row.font))
+    );
+    const y = top + height / 2;
+    top += height;
+    return { ...row, y, size };
+  });
+
   return (
     head.svg +
     foot.svg +
     model.columns
       .map((column, index) => {
         const centerX = area.x + columnWidth * (index + 0.5);
-        let top = area.y;
-        return ROWS.map((row) => {
-          const height = (area.h * row.weight) / totalWeight;
-          const value = column[row.key];
-          // 行の高さに収め、列幅からもはみ出させない。
-          const size = Math.min(height * 0.7, fitSize(value, columnWidth * 0.88, height, row.font));
-          const svg = text(ellipsize(value, columnWidth * 0.88, size, row.font), {
-            x: centerX,
-            y: top + height / 2,
-            size,
-            anchor: 'middle',
-            font: row.font,
-            fill: row.ink,
-          });
-          top += height;
-          return svg;
-        }).join('');
+        return rows
+          .map((row) =>
+            text(ellipsize(column[row.key], columnWidth * 0.88, row.size, row.font), {
+              x: centerX,
+              y: row.y,
+              size: row.size,
+              anchor: 'middle',
+              font: row.font,
+              fill: row.ink,
+            })
+          )
+          .join('');
       })
       .join('')
   );
