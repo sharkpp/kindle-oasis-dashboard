@@ -36,7 +36,7 @@ export function parseFeed(body) {
 }
 
 export function createPiyologFeed({ name, url, intervalSec }) {
-  return new CachedFeed({ name, url, intervalSec, parse: parseFeed });
+  return new CachedFeed({ name, urls: { feed: url }, intervalSec, parse: ({ feed }) => parseFeed(feed) });
 }
 
 /** 指定した種類のうち、いちばん新しい記録。無ければ null。 */

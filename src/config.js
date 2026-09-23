@@ -63,12 +63,13 @@ function readSources(raw, path) {
         {
           name,
           type,
-          url: asString(source.url, `${at}.url`),
           intervalSec: asNumber(source.interval_sec, `${at}.interval_sec`, {
             fallback: kind.defaultIntervalSec,
             min: kind.minIntervalSec,
             max: 86400,
           }),
+          // 何を取りに行くかは種別ごとに違う。
+          ...kind.read(source, at),
         },
       ];
     })

@@ -82,8 +82,8 @@ export function parseIcs(body, { timezone, from = new Date() }) {
 export function createCalendarFeed({ name, url, intervalSec, timezone }) {
   return new CachedFeed({
     name,
-    url,
+    urls: { ics: url },
     intervalSec,
-    parse: (body) => parseIcs(body, { timezone }),
+    parse: ({ ics }) => parseIcs(ics, { timezone }),
   });
 }

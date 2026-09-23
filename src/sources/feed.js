@@ -11,14 +11,17 @@ const MAX_BACKOFF_MS = 30 * 60 * 1000;
 export class CachedFeed {
   /**
    * @param {object} options
-   * @param {string} options.name        ログに出す名前
-   * @param {string} options.url         取得先。URL 自体が認証情報なのでログには出さない
+   * @param {string} options.name  ログに出す名前
+   * @param {Record<string, string>} options.urls
+   *   取得先。名前をキーにした URL の組。1 回の取得で全部を取りに行く。
+   *   URL 自体が認証情報のこともあるのでログには出さない
    * @param {number} options.intervalSec 取得間隔
-   * @param {(body: string) => any} options.parse 応答本文を表示用のデータに変える
+   * @param {(bodies: Record<string, string>) => any} options.parse
+   *   同じキーで応答本文を受け取り、表示用のデータに変える
    */
-  constructor({ name, url, intervalSec, parse }) {
+  constructor({ name, urls, intervalSec, parse }) {
     this.name = name;
-    this.url = url;
+    this.urls = urls;
     this.intervalMs = intervalSec * 1000;
     this.parse = parse;
     this.data = null;
@@ -48,13 +51,12 @@ export class CachedFeed {
 
   async #fetch() {
     try {
-      const res = await fetch(this.url, {
-        headers: { Accept: 'application/json, text/calendar, */*' },
-        signal: AbortSignal.timeout(15000),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status} ${await errorCode(res)}`);
-      const data = this.parse(await res.text());
-      this.data = data;
+      const bodies = Object.fromEntries(
+        await Promise.all(
+          Object.entries(this.urls).map(async ([key, url]) => [key, await fetchText(url)])
+        )
+      );
+      this.data = this.parse(bodies);
       this.fetchedAt = Date.now();
       this.error = null;
       this.failures = 0;
@@ -75,6 +77,15 @@ export class CachedFeed {
       ageMs: this.data ? now - this.fetchedAt : null,
     };
   }
+}
+
+async function fetchText(url) {
+  const res = await fetch(url, {
+    headers: { Accept: 'application/json, text/calendar, */*' },
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status} ${await errorCode(res)}`.trim());
+  return res.text();
 }
 
 /** JSON のエラー本文から `error.code` を拾う。無ければ空文字。 */
