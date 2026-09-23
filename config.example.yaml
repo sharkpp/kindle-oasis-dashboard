@@ -101,6 +101,16 @@ columns:
         height: 0.8
         text: てんき
 
+      # 当日の天気を書式に沿って出す。空になった行は出ないので、
+      # 警報・注意報の行は出ているときだけ現れる。
+      - type: weather-today
+        height: 3
+        source: てんき
+        lines:
+          - { text: "{symbol} {weather_short}", scale: 3 }
+          - { text: "降水 {pop}%  {temp_min}〜{temp_max}℃", scale: 1.4 }
+          - { text: "{warning}", scale: 1.2 }
+
       # 今日・明日・明後日の天気・降水確率・気温。
       - type: weather
         height: 3

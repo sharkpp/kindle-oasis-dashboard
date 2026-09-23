@@ -10,6 +10,7 @@ import { renderScreen } from '../src/render.js';
 import { parseWeather } from '../src/sources/weather.js';
 import * as calendarWidget from '../src/widgets/calendar.js';
 import * as countdownWidget from '../src/widgets/countdown.js';
+import * as weatherTodayWidget from '../src/widgets/weather-today.js';
 
 const TZ = 'Asia/Tokyo';
 /** 2026-09-22 (火) 14:00 JST。固定した「いま」。 */
@@ -222,6 +223,45 @@ test('今日・明日・明後日の天気を並べる', async () => {
     { day: 'あす', symbol: '☁', weather: 'くもり', pop: '40%', temp: '21/26' },
     { day: 'あさって', symbol: '☂', weather: '雨', pop: '60%', temp: '18/22' },
   ]);
+});
+
+test('当日の天気を書式に沿って出す', async () => {
+  const dashboard = dashboardWithFixtures();
+  await dashboard.tick(NOW);
+  assert.deepEqual(findItem(dashboard.view, 'weather-today').lines, [
+    { text: '☀ 晴れ', scale: 3 },
+    { text: '降水 20%  19〜28℃', scale: 1.4 },
+    { text: '雷注意報 大雨注意報', scale: 1.2 },
+  ]);
+});
+
+test('値が空になった行は出さない', () => {
+  const options = weatherTodayWidget.normalize(
+    { type: 'weather-today', lines: ['{area} {weather}', '{warning}'] },
+    'columns[0].items[0]',
+    { てんき: { type: 'weather' } }
+  );
+  // 警報・注意報が出ていない区域では、その行ごと消える。
+  const ctx = {
+    now: NOW,
+    timezone: TZ,
+    sources: { てんき: { data: weatherFixture({ subArea: '130020' }), error: null, ageMs: 0 } },
+  };
+  assert.deepEqual(weatherTodayWidget.build(options, ctx).lines, [
+    { text: '伊豆諸島北部 雨', scale: 1 },
+  ]);
+});
+
+test('書式に知らない値を書けば起動前に分かる', () => {
+  assert.throws(
+    () =>
+      weatherTodayWidget.normalize(
+        { type: 'weather-today', lines: ['{humidity}%'] },
+        'columns[0].items[0]',
+        { てんき: { type: 'weather' } }
+      ),
+    /使えない値です: \{humidity\}/
+  );
 });
 
 test('つぎの予定は、複数のカレンダーをまとめて日付の近いものから', async () => {
