@@ -42,6 +42,16 @@ sources:
     url: "https://calendar.google.com/calendar/ical/zzzzzzzz%40group.calendar.google.com/private-wwwwwwww/basic.ics"
     interval_sec: 600
 
+  # 気象庁の防災情報 JSON。認証も利用登録もいらない。
+  # area は府県予報区のコード（東京都なら 130000）。
+  # sub_area / temp_area を省くと、その予報区の最初の区域とアメダス地点を使う。
+  てんき:
+    type: weather
+    area: "130000"
+    # sub_area: "130010"   # 東京地方
+    # temp_area: "44132"   # 東京（気温を取るアメダス地点）
+    interval_sec: 1800
+
 # 画面はカラムに横分割し、各カラムの中で項目を縦に積む。
 # width と height は比率。端末の画素数に合わせて引き伸ばされる。
 columns:

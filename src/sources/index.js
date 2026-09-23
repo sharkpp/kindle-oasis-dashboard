@@ -7,6 +7,7 @@
 
 import { createCalendarFeed } from './calendar.js';
 import { createPiyologFeed } from './piyolog.js';
+import { createWeatherFeed } from './weather.js';
 import { asString } from '../validate.js';
 
 /** URL だけを持つ取得元の読み取り。 */
@@ -34,6 +35,28 @@ export const SOURCE_KINDS = {
       url: source.url,
       intervalSec: source.intervalSec,
       timezone: config.timezone,
+    }),
+  },
+  weather: {
+    label: '天気予報',
+    // 気象庁の発表は 1 日 3 回（05 / 11 / 17 時）。短い間隔で取りに行く意味がない。
+    minIntervalSec: 600,
+    defaultIntervalSec: 1800,
+    read: (raw, path) => ({
+      // 府県予報区のコード。東京都なら 130000。
+      area: asString(raw.area, `${path}.area`),
+      // 同じ予報区の中の細かい区域。省略すれば最初の区域（多くは県の主要部）。
+      subArea: asString(raw.sub_area, `${path}.sub_area`, { fallback: '' }),
+      // 気温を取るアメダス地点。省略すれば最初の地点。
+      tempArea: asString(raw.temp_area, `${path}.temp_area`, { fallback: '' }),
+    }),
+    create: createWeatherFeed,
+    args: (source) => ({
+      name: source.name,
+      area: source.area,
+      subArea: source.subArea,
+      tempArea: source.tempArea,
+      intervalSec: source.intervalSec,
     }),
   },
 };

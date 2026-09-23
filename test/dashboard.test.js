@@ -7,6 +7,7 @@ import { Dashboard } from '../src/dashboard.js';
 import { parseIcs } from '../src/sources/calendar.js';
 import { parseFeed } from '../src/sources/piyolog.js';
 import { renderScreen } from '../src/render.js';
+import { parseWeather } from '../src/sources/weather.js';
 import * as calendarWidget from '../src/widgets/calendar.js';
 import * as countdownWidget from '../src/widgets/countdown.js';
 
@@ -21,7 +22,15 @@ const FEED_FIXTURES = {
   ぴよログ: () => parseFeed(fixture('piyolog.json')),
   かぞく: () => parseIcs(fixture('calendar.ics'), { timezone: TZ, from: NOW }),
   ほいくえん: () => parseIcs(fixture('calendar2.ics'), { timezone: TZ, from: NOW }),
+  てんき: () => weatherFixture(),
 };
+
+/** 気象庁の予報と警報のフィクスチャを読む。 */
+const weatherFixture = (options = {}) =>
+  parseWeather(
+    { forecast: fixture('weather-forecast.json'), warning: fixture('weather-warning.json') },
+    options
+  );
 
 /** 実際の取得はせず、固定データを入れたダッシュボードを作る。 */
 function dashboardWithFixtures(config = loadConfig(configPath())) {
@@ -67,7 +76,7 @@ test('config.example.yaml が読める', () => {
   const config = loadConfig(configPath());
   assert.equal(config.timezone, TZ);
   assert.equal(config.columns.length, 2);
-  assert.deepEqual(Object.keys(config.sources), ['ぴよログ', 'かぞく', 'ほいくえん']);
+  assert.deepEqual(Object.keys(config.sources), ['ぴよログ', 'かぞく', 'ほいくえん', 'てんき']);
   assert.equal(config.sources['ぴよログ'].intervalSec, 300);
   // 数値ひとつの余白は四辺に広がる。
   assert.deepEqual(config.padding, { top: 28, right: 28, bottom: 28, left: 28 });
@@ -115,7 +124,7 @@ test('つぎのごはんは今より後でいちばん近い時刻', async () =>
 
 test('同じ種別の取得元をいくつでも持てる', () => {
   const dashboard = dashboardWithFixtures();
-  assert.deepEqual(Object.keys(dashboard.feeds), ['ぴよログ', 'かぞく', 'ほいくえん']);
+  assert.deepEqual(Object.keys(dashboard.feeds), ['ぴよログ', 'かぞく', 'ほいくえん', 'てんき']);
   // 同じ種別でも、取得元ごとに別のキャッシュになる。
   assert.notEqual(dashboard.feeds['かぞく'], dashboard.feeds['ほいくえん']);
   assert.notEqual(dashboard.feeds['かぞく'].data, dashboard.feeds['ほいくえん'].data);
@@ -164,6 +173,45 @@ test('日をまたぐと、きょうのミルクは数え直される', async ()
   const model = findItem(dashboard.view, 'milk-total');
   assert.equal(model.count, '0回');
   assert.equal(model.total, '0ml');
+});
+
+test('気象庁の予報を日付ごとにまとめる', () => {
+  const data = weatherFixture();
+  assert.equal(data.areaName, '東京地方');
+
+  // 短期の 3 日分。降水確率は 6 時間ごとの値のうち、その日のいちばん高いもの。
+  assert.deepEqual(data.days.slice(0, 3), [
+    { date: '2026-09-22', code: '101', symbol: '☀', weather: '晴れ 時々 くもり', short: '晴れ', pop: 20, tempMin: 19, tempMax: 28 },
+    { date: '2026-09-23', code: '201', symbol: '☁', weather: 'くもり 時々 晴れ', short: 'くもり', pop: 40, tempMin: 21, tempMax: 26 },
+    // 明後日の天気は短期から、降水確率と気温は週間から。
+    { date: '2026-09-24', code: '300', symbol: '☂', weather: '雨', short: '雨', pop: 60, tempMin: 18, tempMax: 22 },
+  ]);
+
+  // 週間だけの日は、文章が無いのでコードの大分類を短い天気に使う。
+  const snowy = data.days.find((day) => day.date === '2026-09-29');
+  assert.deepEqual([snowy.code, snowy.symbol, snowy.short], ['400', '☃', '雪']);
+});
+
+test('発表中の警報・注意報だけを出す', () => {
+  // 解除されたもの（乾燥注意報）と「発表なし」は含めない。
+  assert.deepEqual(weatherFixture().warnings, ['雷注意報', '大雨注意報']);
+  assert.deepEqual(weatherFixture({ subArea: '130020' }).warnings, []);
+});
+
+test('週間予報に区域が無くても、短期の分だけで出す', () => {
+  // 伊豆諸島北部は週間予報の区分に無い。明後日の降水確率と気温は埋まらない。
+  const data = weatherFixture({ subArea: '130020', tempArea: '44172' });
+  assert.equal(data.areaName, '伊豆諸島北部');
+  assert.deepEqual(data.days[2], {
+    date: '2026-09-24',
+    code: '200',
+    symbol: '☁',
+    weather: 'くもり',
+    short: 'くもり',
+    pop: null,
+    tempMin: null,
+    tempMax: null,
+  });
 });
 
 test('つぎの予定は、複数のカレンダーをまとめて日付の近いものから', async () => {

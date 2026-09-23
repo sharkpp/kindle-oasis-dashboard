@@ -1,0 +1,14 @@
+{
+  "reportDatetime": "2026-09-22T04:40:00+09:00",
+  "publishingOffice": "気象庁",
+  "headlineText": "東京地方では、落雷や急な強い雨に注意してください。",
+  "areaTypes": [
+    {
+      "areas": [
+        { "code": "130010", "warnings": [{ "code": "14", "status": "継続" }, { "code": "10", "status": "発表" }, { "code": "21", "status": "解除" }] },
+        { "code": "130020", "warnings": [{ "status": "発表警報・注意報はなし" }] }
+      ]
+    },
+    { "areas": [{ "code": "1310100", "warnings": [{ "code": "14", "status": "継続" }] }] }
+  ]
+}
