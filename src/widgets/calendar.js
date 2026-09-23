@@ -108,6 +108,7 @@ export function render(model, box) {
 
   return (
     head.svg +
+    foot.svg +
     model.entries
       .map((entry, i) => {
         const y = area.y + rowHeight * (i + 0.5);
