@@ -8,10 +8,11 @@ import * as calendar from './calendar.js';
 import * as clock from './clock.js';
 import * as countdown from './countdown.js';
 import * as milk from './milk.js';
+import * as milkTotal from './milk-total.js';
 import * as section from './section.js';
 
 const WIDGETS = Object.fromEntries(
-  [calendar, clock, countdown, milk, section].map((widget) => [widget.type, widget])
+  [calendar, clock, countdown, milk, milkTotal, section].map((widget) => [widget.type, widget])
 );
 
 export const widgetTypes = Object.keys(WIDGETS).sort();

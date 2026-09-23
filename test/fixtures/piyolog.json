@@ -3,6 +3,7 @@
   "generated_at": "2026-09-22T05:00:00.000Z",
   "range": { "from": "2026-09-21T05:00:00.000Z", "to": "2026-09-22T05:00:00.000Z" },
   "records": [
+    { "event_id": "a0", "datetime": "2026-09-21T13:00:00.000Z", "type": "Formula", "value": { "value": 150, "unit": "ml" } },
     { "event_id": "a1", "datetime": "2026-09-21T21:00:00.000Z", "type": "WakeUp" },
     { "event_id": "a2", "datetime": "2026-09-22T00:30:00.000Z", "type": "Formula", "value": { "value": 120, "unit": "ml" } },
     { "event_id": "a3", "datetime": "2026-09-22T01:40:00.000Z", "type": "BreastFeeding", "last": "right", "leftTime": 300, "rightTime": 240 },

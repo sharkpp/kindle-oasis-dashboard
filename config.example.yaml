@@ -78,6 +78,13 @@ columns:
         # 対象にするぴよログの記録種別。Formula=ミルク, BreastFeeding=母乳。
         record_types: [Formula, BreastFeeding]
 
+      # きょうの回数と量の合計。日の境目は timezone の 0 時。
+      - type: milk-total
+        height: 2
+        label: きょうのごうけい
+        source: ぴよログ
+        record_types: [Formula]
+
   - width: 1
     items:
       - type: section

@@ -85,7 +85,7 @@ test('設定の誤りは項目名つきで知らせる', () => {
 
 test('ぴよログのフィードを読む', () => {
   const data = parseFeed(fixture('piyolog.json'));
-  assert.equal(data.records.length, 5);
+  assert.equal(data.records.length, 6);
   const formula = data.records.filter((record) => record.type === 'Formula');
   assert.equal(formula.at(-1).ml, 140);
   // 量が未入力の記録は 0 ではなく null。
@@ -129,6 +129,41 @@ test('つぎのミルクは前回の記録から指定時間後', async () => {
   assert.equal(model.time, '15:15');
   assert.equal(model.remaining, 'あと 1時間15分');
   assert.equal(model.note, '前回 12:15 · 140ml');
+});
+
+test('きょうのミルクは回数と量の合計を出す', async () => {
+  const dashboard = dashboardWithFixtures();
+  await dashboard.tick(NOW);
+  // 09:30 に 120ml、12:15 に 140ml。前日 22:00 の 150ml は数えない。
+  assert.deepEqual(findItem(dashboard.view, 'milk-total'), {
+    label: 'きょうのごうけい',
+    state: 'ok',
+    total: '260ml',
+    count: '2回',
+    note: '',
+  });
+});
+
+test('量の記録がない回も数え、合計から外したことを出す', async () => {
+  const config = loadConfig(configPath());
+  const item = config.columns[0].items.find((entry) => entry.type === 'milk-total');
+  item.options.recordTypes = ['Formula', 'BreastFeeding'];
+  const dashboard = dashboardWithFixtures(config);
+  await dashboard.tick(NOW);
+  // 10:40 の母乳は量が未入力。回数には入るが合計には入らない。
+  const model = findItem(dashboard.view, 'milk-total');
+  assert.equal(model.count, '3回');
+  assert.equal(model.total, '260ml');
+  assert.equal(model.note, '量の記録がない 1回をのぞく');
+});
+
+test('日をまたぐと、きょうのミルクは数え直される', async () => {
+  const dashboard = dashboardWithFixtures();
+  // 9/23 の 00:30 JST。9/22 の記録はすべて前日になる。
+  await dashboard.tick(new Date('2026-09-22T15:30:00.000Z'));
+  const model = findItem(dashboard.view, 'milk-total');
+  assert.equal(model.count, '0回');
+  assert.equal(model.total, '0ml');
 });
 
 test('つぎの予定は、複数のカレンダーをまとめて日付の近いものから', async () => {
