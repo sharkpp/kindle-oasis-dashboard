@@ -136,12 +136,13 @@ test('つぎの予定は、複数のカレンダーをまとめて日付の近�
   await dashboard.tick(NOW);
   const model = findItem(dashboard.view, 'calendar');
   // 「かぞく」と「ほいくえん」が混ざって時刻順に並ぶ。
+  // 同じ日の予定はまとめて同じ段階になる。段階は直近の日から 0, 1, 2 …。
   assert.deepEqual(model.entries, [
-    { when: '15:30', summary: 'こどもクリニック 予防接種', now: false },
-    { when: '16:30', summary: 'おむかえ', now: false },
-    { when: 'あす 終日', summary: 'えんそく', now: false },
-    { when: '9/25(金) 09:30', summary: 'けんしん', now: false },
-    { when: '9/29(火) 11:00', summary: 'リトミック教室 (時間変更)', now: false },
+    { when: '15:30', summary: 'こどもクリニック 予防接種', now: false, level: 0 },
+    { when: '16:30', summary: 'おむかえ', now: false, level: 0 },
+    { when: 'あす 終日', summary: 'えんそく', now: false, level: 1 },
+    { when: '9/25(金) 09:30', summary: 'けんしん', now: false, level: 2 },
+    { when: '9/29(火) 11:00', summary: 'リトミック教室 (時間変更)', now: false, level: 3 },
   ]);
 });
 
@@ -169,6 +170,80 @@ test('カレンダーは正規表現でも件名を絞り込める', () => {
     model.entries.map((entry) => entry.summary),
     ['リトミック教室 (時間変更)', 'リトミック教室', 'リトミック教室', 'リトミック教室']
   );
+});
+
+/** 段階を振った行。`level` は直近の日から 0, 1, 2 …。 */
+const leveledEntries = (levels) =>
+  levels.map((level, i) => ({ when: `9/2${i}(金) 09:30`, summary: 'よてい', now: false, level }));
+
+test('カレンダーの文字の大きさを段階ごとに指定できる', () => {
+  const entries = leveledEntries([0, 0, 1, 2]);
+  const area = { x: 0, y: 0, w: 1200, h: 800 };
+
+  // 省略すれば、行の高さと時刻の欄の幅から自動で決まる。すべて同じ高さ。
+  const auto = calendarWidget.rowMetrics(entries, area);
+  assert.deepEqual(
+    auto.rows.map((row) => row.y),
+    [100, 300, 500, 700]
+  );
+  assert.ok(auto.rows.every((row) => row.size === auto.rows[0].size));
+
+  // 段階がひとつなら全行に効く。行は等分のまま、文字だけ小さくなる。
+  const uniform = calendarWidget.rowMetrics(entries, area, {
+    levels: [{ fontSize: 20 }],
+  });
+  assert.deepEqual(
+    uniform.rows.map((row) => row.size),
+    [20, 20, 20, 20]
+  );
+  assert.deepEqual(
+    uniform.rows.map((row) => row.y),
+    [100, 300, 500, 700]
+  );
+
+  // 最初 / その次 / その他 の 3 段階。同じ日の 2 件はまとめて最初の段階になる。
+  const { rows } = calendarWidget.rowMetrics(entries, area, {
+    levels: [
+      { fontSize: 40 },
+      { fontSize: 30 },
+      { fontSize: 20 },
+    ],
+  });
+  assert.deepEqual(
+    rows.map((row) => row.size),
+    [40, 40, 30, 20]
+  );
+  // 40:40:30:20 → 800px を 246:246:185:123 で分ける。
+  assert.deepEqual(
+    rows.map((row) => Math.round(row.y)),
+    [123, 369, 585, 738]
+  );
+});
+
+test('段階が尽きた分は最後の段階を使う', () => {
+  const { rows } = calendarWidget.rowMetrics(
+    leveledEntries([0, 1, 2, 3]),
+    { x: 0, y: 0, w: 1200, h: 800 },
+    { levels: [{ fontSize: 40 }, { fontSize: 20 }] }
+  );
+  assert.deepEqual(
+    rows.map((row) => row.size),
+    [40, 20, 20, 20]
+  );
+});
+
+test('大きすぎる指定は枠に収まるところまで縮める', () => {
+  const entries = leveledEntries([0, 0, 0, 0]).map((entry) => ({ ...entry, when: '15:30' }));
+  const levels = [{ fontSize: 200 }];
+
+  // 1 行 50px に 200px の文字は入らない。行の高さに収まるところまで下げる。
+  const tall = calendarWidget.rowMetrics(entries, { x: 0, y: 0, w: 1200, h: 200 }, { levels });
+  assert.ok(tall.rows.every((row) => row.size < 50), '行からあふれない');
+  assert.ok(tall.rows.every((row) => row.size === tall.rows[0].size), '一律で縮める');
+
+  // 時刻の欄が幅の 60% を超えるほど大きくもしない。件名の場所が無くなるため。
+  const wide = calendarWidget.rowMetrics(entries, { x: 0, y: 0, w: 400, h: 2000 }, { levels });
+  assert.ok(Math.max(...wide.rows.map((row) => row.gutter)) <= 240, '件名を出す幅が残る');
 });
 
 test('取得元の指定が間違っていれば起動前に分かる', () => {
