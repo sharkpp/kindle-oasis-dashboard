@@ -12,6 +12,7 @@ import { parseFeed } from '../src/sources/piyolog.js';
 import { renderScreen } from '../src/render.js';
 import { resolveCity } from '../src/sources/jma-area.js';
 import { parseJma } from '../src/sources/weather-jma.js';
+import { parseTenki } from '../src/sources/weather-tenki.js';
 import * as calendarWidget from '../src/widgets/calendar.js';
 import * as countdownWidget from '../src/widgets/countdown.js';
 import * as weatherTodayWidget from '../src/widgets/weather-today.js';
@@ -286,12 +287,59 @@ test('時間帯は、いまが入っている帯から先を出す', async () =>
   const dashboard = dashboardWithFixtures();
   await dashboard.tick(NOW);
   // 2026-09-22 14:00 なので、06-12 の帯は終わっている。
+  // 気象庁は時間帯ごとの天気を出さないので、記号は空になる。
   assert.deepEqual(findItem(dashboard.view, 'weather-timeline').bands, [
-    { time: '12-18', pop: 10 },
-    { time: '18-24', pop: 20 },
-    { time: 'あす 00-06', pop: 0 },
-    { time: 'あす 06-12', pop: 10 },
+    { time: '12-18', pop: 10, symbol: '' },
+    { time: '18-24', pop: 20, symbol: '' },
+    { time: 'あす 00-06', pop: 0, symbol: '' },
+    { time: 'あす 06-12', pop: 10, symbol: '' },
   ]);
+});
+
+test('tenki.jp のページから予報を読む', () => {
+  const data = parseTenki(
+    { forecast: fixture('tenki-forecast.html'), hourly: fixture('tenki-hourly.html') },
+    { now: new Date('2026-09-23T14:00:00.000Z') }
+  );
+  assert.equal(data.areaName, '阿久比町');
+  // 今日・明日はページの上の欄から、明後日以降は 10 日間天気から。
+  assert.deepEqual(data.days[0], {
+    date: '2026-09-23',
+    code: null,
+    symbol: '☀',
+    weather: '晴のち曇',
+    short: '晴',
+    pop: 20,
+    tempMin: 21,
+    tempMax: 27,
+  });
+  assert.equal(data.days[2].date, '2026-09-25');
+  assert.equal(data.days[2].short, '曇');
+  // 警報・注意報は予報ページに載っていない。
+  assert.deepEqual(data.warnings, []);
+});
+
+test('tenki.jp なら時間帯は 1 時間ごとになる', () => {
+  const now = new Date('2026-09-23T14:00:00.000Z');
+  const forecast = fixture('tenki-forecast.html');
+
+  // 1 時間天気のページがあれば 1 時間ごと。天気の記号も付く。
+  const hourly = parseTenki({ forecast, hourly: fixture('tenki-hourly.html') }, { now });
+  assert.deepEqual(hourly.bands[0], {
+    date: '2026-09-23',
+    hour: 23,
+    hours: 1,
+    pop: 20,
+    symbol: '☁',
+    short: '曇り',
+    temp: 22.1,
+  });
+  assert.ok(hourly.bands.every((band) => band.hours === 1));
+
+  // 取れなければ、予報ページの 6 時間ごとの帯を使う。
+  const sixHours = parseTenki({ forecast }, { now });
+  assert.ok(sixHours.bands.every((band) => band.hours === 6));
+  assert.equal(sixHours.bands[0].symbol, '');
 });
 
 test('当日の天気を書式に沿って出す', async () => {

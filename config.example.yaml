@@ -42,15 +42,26 @@ sources:
     url: "https://calendar.google.com/calendar/ical/zzzzzzzz%40group.calendar.google.com/private-wwwwwwww/basic.ics"
     interval_sec: 600
 
-  # 気象庁の防災情報 JSON。認証も利用登録もいらない。
-  # city は市町村コード（千代田区なら 1310100）。気象庁の天気予報のページで
-  # 市町村を選んだときの URL に出てくる area_code がそれ。
-  # 予報区と気温のアメダス地点は、このコードから自動で決まる。
+  # 天気予報。provider でどこから取るかを選ぶ。
+  #
+  # jma（既定）— 気象庁の防災情報 JSON。認証も利用登録もいらない。
+  #   city は市町村コード（千代田区なら 1310100）。気象庁の天気予報のページで
+  #   市町村を選んだときの URL に出てくる area_code がそれ。
+  #   予報区と気温のアメダス地点は、このコードから自動で決まる。
   てんき:
     type: weather
     provider: jma
     city: "1310100"
     interval_sec: 1800
+
+  # tenki.jp — 日本気象協会のページを読む。1 時間ごとの天気・気温・降水確率が
+  #   取れる代わりに、警報・注意報は載っていない。
+  #   url は tenki.jp で地点を開いたときのアドレスをそのまま書く。
+  # てんき2:
+  #   type: weather
+  #   provider: tenki
+  #   url: "https://tenki.jp/forecast/5/26/5110/23441/"
+  #   interval_sec: 3600
 
 # 画面はカラムに横分割し、各カラムの中で項目を縦に積む。
 # width と height は比率。端末の画素数に合わせて引き伸ばされる。
@@ -117,7 +128,8 @@ columns:
         source: てんき
         days: 3
 
-      # 時間帯ごとの降水確率。気象庁が出しているいちばん細かい単位が 6 時間ごと。
+      # 時間帯ごとの天気と降水確率。帯の細かさは取得元による
+      # （気象庁なら 6 時間ごと、tenki.jp なら 1 時間ごと）。
       - type: weather-timeline
         height: 2.5
         source: てんき

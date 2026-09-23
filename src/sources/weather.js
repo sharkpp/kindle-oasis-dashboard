@@ -15,11 +15,12 @@
  * ```
  *
  * `days[].date` と `bands[].date` は `YYYY-MM-DD`。日本の天気予報なので日本時間で数える。
- * プロバイダによって埋まらない欄がある（気象庁は時間帯ごとの天気を出していない）。
- * 埋まらない欄は null か空にする。
+ * プロバイダによって埋まらない欄がある（気象庁は時間帯ごとの天気を出していない、
+ * tenki.jp は警報・注意報を出していない）。埋まらない欄は null か空にする。
  */
 
 import { createJmaFeed } from './weather-jma.js';
+import { createTenkiFeed } from './weather-tenki.js';
 import { asString } from '../validate.js';
 
 export const WEATHER_PROVIDERS = {
@@ -31,6 +32,15 @@ export const WEATHER_PROVIDERS = {
     // 市町村コード（千代田区なら 1310100）。予報区と気温の地点はここから求める。
     read: (raw, path) => ({ city: asString(raw.city, `${path}.city`) }),
     create: createJmaFeed,
+  },
+  tenki: {
+    label: 'tenki.jp',
+    // ページを読みに行くので、気象庁より控えめにする。
+    defaultIntervalSec: 3600,
+    minIntervalSec: 1800,
+    // 地点のページの URL。tenki.jp で地点を開いたときのアドレスをそのまま書く。
+    read: (raw, path) => ({ url: asString(raw.url, `${path}.url`) }),
+    create: createTenkiFeed,
   },
 };
 
