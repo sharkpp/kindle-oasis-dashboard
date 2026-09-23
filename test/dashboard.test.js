@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { test } from 'node:test';
 import sharp from 'sharp';
 import { loadConfig } from '../src/config.js';
+import { widgetTypes } from '../src/widgets/index.js';
 import { Dashboard } from '../src/dashboard.js';
 import { parseIcs } from '../src/sources/calendar.js';
 import { parseFeed } from '../src/sources/piyolog.js';
@@ -17,6 +20,20 @@ const TZ = 'Asia/Tokyo';
 const NOW = new Date('2026-09-22T05:00:00.000Z');
 
 const fixture = (name) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');
+
+/** docs/widgets.md のサンプルが指す取得元。 */
+const SAMPLE_SOURCES = `sources:
+  ぴよログ: { type: piyolog, url: "https://feed.piyolog.com/v1/feed/24h/ID/SECRET" }
+  かぞく: { type: calendar, url: "https://calendar.google.com/calendar/ical/a/private-b/basic.ics" }
+  ほいくえん: { type: calendar, url: "https://calendar.google.com/calendar/ical/c/private-d/basic.ics" }
+  てんき: { type: weather, area: "130000" }
+`;
+
+const indent = (text, width) =>
+  text
+    .split('\n')
+    .map((line) => (line.trim() === '' ? line : ' '.repeat(width) + line))
+    .join('\n');
 const configPath = (name = '../config.example.yaml') => new URL(name, import.meta.url).pathname;
 
 const FEED_FIXTURES = {
@@ -87,6 +104,25 @@ test('余白は辺ごとに指定できる', () => {
   const config = loadConfig(configPath('./fixtures/padding.yaml'));
   // 端末で切れる分を詰めるための指定。書かなかった辺は既定値のまま。
   assert.deepEqual(config.padding, { top: 24, right: 20, bottom: 60, left: 20 });
+});
+
+test('docs/widgets.md のサンプルはそのまま設定として読める', () => {
+  const doc = readFileSync(new URL('../docs/widgets.md', import.meta.url).pathname, 'utf8');
+  // 項目ひとつ分のサンプル（`- type:` で始まる yaml のかたまり）だけを取り出す。
+  const samples = [...doc.matchAll(/```yaml\n([\s\S]*?)```/g)]
+    .map((match) => match[1])
+    .filter((block) => block.trimStart().startsWith('- type:'));
+  assert.equal(samples.length, widgetTypes.length, '項目の数だけサンプルがある');
+
+  const dir = mkdtempSync(join(tmpdir(), 'widgets-'));
+  const used = new Set();
+  for (const [i, sample] of samples.entries()) {
+    const path = join(dir, `sample-${i}.yaml`);
+    writeFileSync(path, `${SAMPLE_SOURCES}columns:\n  - items:\n${indent(sample, 6)}`);
+    const config = loadConfig(path);
+    for (const item of config.columns[0].items) used.add(item.type);
+  }
+  assert.deepEqual([...used].sort(), widgetTypes, 'どの項目にもサンプルがある');
 });
 
 test('設定の誤りは項目名つきで知らせる', () => {
