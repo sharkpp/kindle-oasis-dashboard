@@ -12,9 +12,10 @@ export class CachedFeed {
   /**
    * @param {object} options
    * @param {string} options.name  ログに出す名前
-   * @param {Record<string, string>} options.urls
+   * @param {Record<string, string> | (() => Promise<Record<string, string>>)} options.urls
    *   取得先。名前をキーにした URL の組。1 回の取得で全部を取りに行く。
-   *   URL 自体が認証情報のこともあるのでログには出さない
+   *   URL 自体が認証情報のこともあるのでログには出さない。
+   *   取得先を決めるのに別の問い合わせが要る場合は、関数を渡せる
    * @param {number} options.intervalSec 取得間隔
    * @param {(bodies: Record<string, string>) => any} options.parse
    *   同じキーで応答本文を受け取り、表示用のデータに変える
@@ -51,9 +52,10 @@ export class CachedFeed {
 
   async #fetch() {
     try {
+      const urls = typeof this.urls === 'function' ? await this.urls() : this.urls;
       const bodies = Object.fromEntries(
         await Promise.all(
-          Object.entries(this.urls).map(async ([key, url]) => [key, await fetchText(url)])
+          Object.entries(urls).map(async ([key, url]) => [key, await fetchText(url)])
         )
       );
       this.data = this.parse(bodies);
