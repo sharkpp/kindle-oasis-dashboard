@@ -22,6 +22,7 @@ const FIELDS = {
   temp_max: (day) => (day.tempMax === null ? '—' : String(day.tempMax)),
   warning: (day, data) => data.warnings.join(' '),
   area: (day, data) => data.areaName,
+  city: (day, data) => data.cityName,
   day: (day, data, ctx) => dayLabel(daysFrom(todayKey(ctx), day.date), day.date),
 };
 

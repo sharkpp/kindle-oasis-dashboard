@@ -10,6 +10,7 @@ import { Dashboard } from '../src/dashboard.js';
 import { parseIcs } from '../src/sources/calendar.js';
 import { parseFeed } from '../src/sources/piyolog.js';
 import { renderScreen } from '../src/render.js';
+import { resolveCity } from '../src/sources/jma-area.js';
 import { parseWeather } from '../src/sources/weather.js';
 import * as calendarWidget from '../src/widgets/calendar.js';
 import * as countdownWidget from '../src/widgets/countdown.js';
@@ -26,7 +27,7 @@ const SAMPLE_SOURCES = `sources:
   ぴよログ: { type: piyolog, url: "https://feed.piyolog.com/v1/feed/24h/ID/SECRET" }
   かぞく: { type: calendar, url: "https://calendar.google.com/calendar/ical/a/private-b/basic.ics" }
   ほいくえん: { type: calendar, url: "https://calendar.google.com/calendar/ical/c/private-d/basic.ics" }
-  てんき: { type: weather, area: "130000" }
+  てんき: { type: weather, city: "1310100" }
 `;
 
 const indent = (text, width) =>
@@ -232,12 +233,32 @@ test('気象庁の予報を日付ごとにまとめる', () => {
 test('発表中の警報・注意報だけを出す', () => {
   // 解除されたもの（乾燥注意報）と「発表なし」は含めない。
   assert.deepEqual(weatherFixture().warnings, ['雷注意報', '大雨注意報']);
-  assert.deepEqual(weatherFixture({ subArea: '130020' }).warnings, []);
+  assert.deepEqual(weatherFixture({ class10: '130020' }).warnings, []);
+  // 市町村コードを渡せば、市町村の欄を見る。予報区とは内容が違うことがある。
+  assert.deepEqual(weatherFixture({ city: '1310100', class10: '130010' }).warnings, ['雷注意報']);
+});
+
+test('市町村コードから予報区とアメダス地点を求める', () => {
+  const tables = {
+    area: JSON.parse(fixture('jma-area.json')),
+    forecastArea: JSON.parse(fixture('jma-forecast-area.json')),
+  };
+  assert.deepEqual(resolveCity('1310100', tables), {
+    office: '130000',
+    class10: '130010',
+    amedas: '44132',
+    city: '1310100',
+    names: { city: '千代田区', class10: '東京地方', office: '東京都' },
+  });
+  // 同じ都道府県でも、島は別の予報区と地点になる。
+  assert.deepEqual(resolveCity('1336100', tables).class10, '130020');
+  assert.deepEqual(resolveCity('1336100', tables).amedas, '44172');
+  assert.throws(() => resolveCity('9999999', tables), /区域表にありません/);
 });
 
 test('週間予報に区域が無くても、短期の分だけで出す', () => {
   // 伊豆諸島北部は週間予報の区分に無い。明後日の降水確率と気温は埋まらない。
-  const data = weatherFixture({ subArea: '130020', tempArea: '44172' });
+  const data = weatherFixture({ class10: '130020', amedas: '44172' });
   assert.equal(data.areaName, '伊豆諸島北部');
   assert.deepEqual(data.days[2], {
     date: '2026-09-24',
@@ -281,7 +302,7 @@ test('値が空になった行は出さない', () => {
   const ctx = {
     now: NOW,
     timezone: TZ,
-    sources: { てんき: { data: weatherFixture({ subArea: '130020' }), error: null, ageMs: 0 } },
+    sources: { てんき: { data: weatherFixture({ class10: '130020' }), error: null, ageMs: 0 } },
   };
   assert.deepEqual(weatherTodayWidget.build(options, ctx).lines, [
     { text: '伊豆諸島北部 雨', scale: 1 },

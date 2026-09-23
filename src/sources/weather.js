@@ -4,15 +4,17 @@
  * - 予報 https://www.jma.go.jp/bosai/forecast/data/forecast/{area}.json
  * - 警報 https://www.jma.go.jp/bosai/warning/data/warning/{area}.json
  *
- * `{area}` は府県予報区のコード（東京都なら 130000）。予報 JSON は
- * 短期（今日・明日・明後日）と週間の 2 つに分かれ、同じ日の値が両方に出てくる。
- * ここでは日付をキーにして重ね、細かい方（短期）を優先する。
+ * `{area}` は府県予報区のコードで、設定に書いた市町村コードから求める（jma-area.js）。
+ * 予報 JSON は短期（今日・明日・明後日）と週間の 2 つに分かれ、同じ日の値が両方に
+ * 出てくる。ここでは日付をキーにして重ね、細かい方（短期）を優先する。
+ *
  *
  * 公開されている静的ファイルで、認証も利用登録もいらない。そのぶん取りに行きすぎない
  * よう、発表は 1 日 3 回（05/11/17 時）であることを踏まえて取得間隔を長めにする。
  */
 
 import { CachedFeed } from './feed.js';
+import { areaTables, resolveCity } from './jma-area.js';
 
 const FORECAST_URL = (area) => `https://www.jma.go.jp/bosai/forecast/data/forecast/${area}.json`;
 const WARNING_URL = (area) => `https://www.jma.go.jp/bosai/warning/data/warning/${area}.json`;
@@ -92,7 +94,7 @@ function fill(day, values) {
   }
 }
 
-function parseForecast(json, { subArea, tempArea }) {
+function parseForecast(json, { class10: subArea, amedas: tempArea }) {
   const [short, weekly] = json;
   const days = new Map();
 
@@ -162,10 +164,16 @@ function parseForecast(json, { subArea, tempArea }) {
   };
 }
 
-/** 発表中の警報・注意報。解除されたものと「発表なし」は除く。 */
-function parseWarning(json, { subArea }) {
-  const areas = json.areaTypes?.[0]?.areas ?? [];
-  const area = subArea ? areas.find((entry) => entry.code === subArea) : areas[0];
+/**
+ * 発表中の警報・注意報。解除されたものと「発表なし」は除く。
+ * 警報・注意報は市町村の単位で出ているので、市町村の欄（areaTypes[1]）を優先して見る。
+ */
+function parseWarning(json, { city, class10 }) {
+  const areas =
+    json.areaTypes?.[1]?.areas?.find((entry) => entry.code === city) === undefined
+      ? (json.areaTypes?.[0]?.areas ?? [])
+      : json.areaTypes[1].areas;
+  const area = areas.find((entry) => entry.code === city || entry.code === class10) ?? areas[0];
   if (!area) return [];
   return (area.warnings ?? [])
     .filter((warning) => warning.code && warning.status !== '解除')
@@ -175,15 +183,22 @@ function parseWarning(json, { subArea }) {
 export function parseWeather({ forecast, warning }, options) {
   return {
     ...parseForecast(JSON.parse(forecast), options),
+    // 予報の区域名（東京地方）と、設定に書いた市町村の名前（千代田区）。
+    cityName: options.names?.city ?? '',
     warnings: parseWarning(JSON.parse(warning), options),
   };
 }
 
-export function createWeatherFeed({ name, area, subArea, tempArea, intervalSec }) {
+export function createWeatherFeed({ name, city, intervalSec }) {
+  // 市町村コードから予報区を決めるのに区域表がいる。取得の直前に一度だけ引く。
+  let resolved = null;
   return new CachedFeed({
     name,
-    urls: { forecast: FORECAST_URL(area), warning: WARNING_URL(area) },
+    urls: async () => {
+      resolved ??= resolveCity(city, await areaTables());
+      return { forecast: FORECAST_URL(resolved.office), warning: WARNING_URL(resolved.office) };
+    },
     intervalSec,
-    parse: (bodies) => parseWeather(bodies, { subArea, tempArea }),
+    parse: (bodies) => parseWeather(bodies, resolved),
   });
 }
