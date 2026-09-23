@@ -43,6 +43,8 @@ function readPadding(raw, path) {
   );
 }
 
+const valueOf = (value, raw) => (typeof value === 'function' ? value(raw) : value);
+
 /**
  * 取得元。名前を付けて `type` で種別を選ぶので、同じ種別をいくつでも定義できる。
  */
@@ -63,9 +65,10 @@ function readSources(raw, path) {
         {
           name,
           type,
+          // 取りに行ってよい間隔は、取得元によっては書き方でも変わる。
           intervalSec: asNumber(source.interval_sec, `${at}.interval_sec`, {
-            fallback: kind.defaultIntervalSec,
-            min: kind.minIntervalSec,
+            fallback: valueOf(kind.defaultIntervalSec, source),
+            min: valueOf(kind.minIntervalSec, source),
             max: 86400,
           }),
           // 何を取りに行くかは種別ごとに違う。

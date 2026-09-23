@@ -11,7 +11,7 @@ import { parseIcs } from '../src/sources/calendar.js';
 import { parseFeed } from '../src/sources/piyolog.js';
 import { renderScreen } from '../src/render.js';
 import { resolveCity } from '../src/sources/jma-area.js';
-import { parseWeather } from '../src/sources/weather.js';
+import { parseJma } from '../src/sources/weather-jma.js';
 import * as calendarWidget from '../src/widgets/calendar.js';
 import * as countdownWidget from '../src/widgets/countdown.js';
 import * as weatherTodayWidget from '../src/widgets/weather-today.js';
@@ -46,7 +46,7 @@ const FEED_FIXTURES = {
 
 /** 気象庁の予報と警報のフィクスチャを読む。 */
 const weatherFixture = (options = {}) =>
-  parseWeather(
+  parseJma(
     { forecast: fixture('weather-forecast.json'), warning: fixture('weather-warning.json') },
     options
   );

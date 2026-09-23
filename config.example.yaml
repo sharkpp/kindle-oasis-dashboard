@@ -48,6 +48,7 @@ sources:
   # 予報区と気温のアメダス地点は、このコードから自動で決まる。
   てんき:
     type: weather
+    provider: jma
     city: "1310100"
     interval_sec: 1800
 

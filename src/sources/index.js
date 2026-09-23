@@ -7,11 +7,15 @@
 
 import { createCalendarFeed } from './calendar.js';
 import { createPiyologFeed } from './piyolog.js';
-import { createWeatherFeed } from './weather.js';
-import { asString } from '../validate.js';
+import { WEATHER_PROVIDERS, providerNames } from './weather.js';
+import { asEnum, asString } from '../validate.js';
 
 /** URL だけを持つ取得元の読み取り。 */
 const readUrl = (raw, path) => ({ url: asString(raw.url, `${path}.url`) });
+
+const DEFAULT_PROVIDER = 'jma';
+/** 設定に書かれた天気予報のプロバイダ。不明なら既定のもので読み、検証で弾く。 */
+const provider = (raw) => WEATHER_PROVIDERS[raw.provider] ?? WEATHER_PROVIDERS[DEFAULT_PROVIDER];
 
 export const SOURCE_KINDS = {
   piyolog: {
@@ -39,17 +43,18 @@ export const SOURCE_KINDS = {
   },
   weather: {
     label: '天気予報',
-    // 気象庁の発表は 1 日 3 回（05 / 11 / 17 時）。短い間隔で取りに行く意味がない。
-    minIntervalSec: 600,
-    defaultIntervalSec: 1800,
-    // 市町村コード（千代田区なら 1310100）。予報区と気温の地点はここから求める。
-    read: (raw, path) => ({ city: asString(raw.city, `${path}.city`) }),
-    create: createWeatherFeed,
-    args: (source) => ({
-      name: source.name,
-      city: source.city,
-      intervalSec: source.intervalSec,
+    // どこから取るかで、取りに行ってよい間隔も、指定する項目も変わる。
+    minIntervalSec: (raw) => provider(raw).minIntervalSec,
+    defaultIntervalSec: (raw) => provider(raw).defaultIntervalSec,
+    read: (raw, path) => ({
+      provider: asEnum(raw.provider, `${path}.provider`, providerNames, DEFAULT_PROVIDER),
+      ...provider(raw).read(raw, path),
     }),
+    create: (args) => WEATHER_PROVIDERS[args.provider].create(args),
+    args: (source) => {
+      const { type, ...rest } = source;
+      return rest;
+    },
   },
 };
 
