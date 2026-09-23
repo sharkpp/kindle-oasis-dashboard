@@ -99,6 +99,16 @@ columns:
     items:
       - type: section
         height: 0.8
+        text: てんき
+
+      # 今日・明日・明後日の天気・降水確率・気温。
+      - type: weather
+        height: 3
+        source: てんき
+        days: 3
+
+      - type: section
+        height: 0.8
         text: きょうのよてい
 
       - type: calendar

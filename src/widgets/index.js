@@ -10,9 +10,13 @@ import * as countdown from './countdown.js';
 import * as milk from './milk.js';
 import * as milkTotal from './milk-total.js';
 import * as section from './section.js';
+import * as weather from './weather.js';
 
 const WIDGETS = Object.fromEntries(
-  [calendar, clock, countdown, milk, milkTotal, section].map((widget) => [widget.type, widget])
+  [calendar, clock, countdown, milk, milkTotal, section, weather].map((widget) => [
+    widget.type,
+    widget,
+  ])
 );
 
 export const widgetTypes = Object.keys(WIDGETS).sort();

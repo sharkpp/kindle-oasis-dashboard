@@ -214,6 +214,16 @@ test('週間予報に区域が無くても、短期の分だけで出す', () =>
   });
 });
 
+test('今日・明日・明後日の天気を並べる', async () => {
+  const dashboard = dashboardWithFixtures();
+  await dashboard.tick(NOW);
+  assert.deepEqual(findItem(dashboard.view, 'weather').columns, [
+    { day: 'きょう', symbol: '☀', weather: '晴れ', pop: '20%', temp: '19/28' },
+    { day: 'あす', symbol: '☁', weather: 'くもり', pop: '40%', temp: '21/26' },
+    { day: 'あさって', symbol: '☂', weather: '雨', pop: '60%', temp: '18/22' },
+  ]);
+});
+
 test('つぎの予定は、複数のカレンダーをまとめて日付の近いものから', async () => {
   const dashboard = dashboardWithFixtures();
   await dashboard.tick(NOW);
