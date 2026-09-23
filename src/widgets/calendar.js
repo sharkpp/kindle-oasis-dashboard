@@ -45,10 +45,20 @@ function readMatch(raw, path) {
   }
 }
 
-/** 段階ごとの見せ方。 */
+/**
+ * 段階ごとの見せ方。`font_size` は px、`font_scale` は項目の高さに対する割合。
+ * 端末ごとに画素数が違うので、割合で書けば同じ見え方になる。
+ */
 function readLevel(raw, path) {
   const level = asObject(raw, path);
-  return { fontSize: asNumber(level.font_size, `${path}.font_size`, { min: 6, max: 400 }) };
+  const hasSize = level.font_size !== undefined && level.font_size !== null;
+  const hasScale = level.font_scale !== undefined && level.font_scale !== null;
+  if (hasSize && hasScale) reject(path, 'font_size と font_scale はどちらか一方だけ指定してください');
+  if (!hasSize && !hasScale) reject(path, 'font_size か font_scale を指定してください');
+  return {
+    fontSize: hasSize ? asNumber(level.font_size, `${path}.font_size`, { min: 6, max: 400 }) : null,
+    fontScale: hasScale ? asNumber(level.font_scale, `${path}.font_scale`, { min: 0.01, max: 1 }) : null,
+  };
 }
 
 /**
@@ -145,7 +155,7 @@ export function build(options, ctx) {
  * @returns {{rows: Array<{y:number, size:number, gutter:number}>}}
  *   `gutter` は時刻の欄の幅（px）。同じ大きさの行どうしで件名の開始位置を揃える。
  */
-export function rowMetrics(entries, area, { levels = null } = {}) {
+export function rowMetrics(entries, area, { levels = null, itemHeight = 0 } = {}) {
   // 大きさを決めるときは、最も長い時刻の表記が収まることを基準にする。
   const longestWhen = entries.reduce(
     (longest, entry) => (textWidth(entry.when, MONO) > textWidth(longest, MONO) ? entry.when : longest),
@@ -156,7 +166,8 @@ export function rowMetrics(entries, area, { levels = null } = {}) {
   const requested = entries.map((entry) => {
     if (!levels) return autoSize;
     // 段階が尽きた分は最後の段階を使う。
-    return levels[Math.min(entry.level, levels.length - 1)].fontSize;
+    const level = levels[Math.min(entry.level, levels.length - 1)];
+    return level.fontSize ?? level.fontScale * itemHeight;
   });
   const total = requested.reduce((sum, size) => sum + size, 0);
 
@@ -197,7 +208,11 @@ export function render(model, box) {
   if (model.entries.length === 0) return head.svg + foot.svg + unavailable(foot.rest);
 
   const area = foot.rest;
-  const { rows } = rowMetrics(model.entries, area, { levels: model.levels });
+  // font_scale は項目の高さに対する割合。端末の画素数が変わっても同じ見え方になる。
+  const { rows } = rowMetrics(model.entries, area, {
+    levels: model.levels,
+    itemHeight: box.h,
+  });
 
   return (
     head.svg +

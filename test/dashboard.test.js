@@ -190,7 +190,7 @@ test('カレンダーの文字の大きさを段階ごとに指定できる', ()
 
   // 段階がひとつなら全行に効く。行は等分のまま、文字だけ小さくなる。
   const uniform = calendarWidget.rowMetrics(entries, area, {
-    levels: [{ fontSize: 20 }],
+    levels: [{ fontSize: 20, fontScale: null }],
   });
   assert.deepEqual(
     uniform.rows.map((row) => row.size),
@@ -204,9 +204,9 @@ test('カレンダーの文字の大きさを段階ごとに指定できる', ()
   // 最初 / その次 / その他 の 3 段階。同じ日の 2 件はまとめて最初の段階になる。
   const { rows } = calendarWidget.rowMetrics(entries, area, {
     levels: [
-      { fontSize: 40 },
-      { fontSize: 30 },
-      { fontSize: 20 },
+      { fontSize: 40, fontScale: null },
+      { fontSize: 30, fontScale: null },
+      { fontSize: 20, fontScale: null },
     ],
   });
   assert.deepEqual(
@@ -224,7 +224,7 @@ test('段階が尽きた分は最後の段階を使う', () => {
   const { rows } = calendarWidget.rowMetrics(
     leveledEntries([0, 1, 2, 3]),
     { x: 0, y: 0, w: 1200, h: 800 },
-    { levels: [{ fontSize: 40 }, { fontSize: 20 }] }
+    { levels: [{ fontSize: 40, fontScale: null }, { fontSize: 20, fontScale: null }] }
   );
   assert.deepEqual(
     rows.map((row) => row.size),
@@ -232,9 +232,32 @@ test('段階が尽きた分は最後の段階を使う', () => {
   );
 });
 
+test('文字の大きさを項目の高さの割合で指定できる', () => {
+  const entries = leveledEntries([0, 1]);
+  const area = { x: 0, y: 0, w: 2000, h: 800 };
+  const levels = [
+    { fontSize: null, fontScale: 0.1 },
+    { fontSize: null, fontScale: 0.05 },
+  ];
+
+  // 項目の高さ 1000px なら 100px と 50px。
+  const tall = calendarWidget.rowMetrics(entries, area, { levels, itemHeight: 1000 });
+  assert.deepEqual(
+    tall.rows.map((row) => row.size),
+    [100, 50]
+  );
+
+  // 端末が小さくなれば、同じ設定でも同じ比で小さくなる。
+  const half = calendarWidget.rowMetrics(entries, { ...area, h: 400 }, { levels, itemHeight: 500 });
+  assert.deepEqual(
+    half.rows.map((row) => row.size),
+    [50, 25]
+  );
+});
+
 test('大きすぎる指定は枠に収まるところまで縮める', () => {
   const entries = leveledEntries([0, 0, 0, 0]).map((entry) => ({ ...entry, when: '15:30' }));
-  const levels = [{ fontSize: 200 }];
+  const levels = [{ fontSize: 200, fontScale: null }];
 
   // 1 行 50px に 200px の文字は入らない。行の高さに収まるところまで下げる。
   const tall = calendarWidget.rowMetrics(entries, { x: 0, y: 0, w: 1200, h: 200 }, { levels });
