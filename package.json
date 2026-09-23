@@ -13,6 +13,7 @@
     "node": ">=20"
   },
   "dependencies": {
+    "cheerio": "^1.2.0",
     "ical.js": "^2.2.1",
     "sharp": "^0.34.5",
     "yaml": "^2.9.1"
