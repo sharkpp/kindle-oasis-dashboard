@@ -13,9 +13,7 @@
  * - `build(options, ctx)`
  *     表示内容（model）を組み立てる。`ctx` は `{ now, timezone, sources }` で、
  *     `ctx.sources` は名前 → `{ data, error, ageMs }`。
- *     model は JSON にできる素のデータだけにする。画面全体の model が前回と一字一句
- *     同じなら版番号を上げず、電子ペーパーを書き換えない。だから時刻は必要な粒度まで
- *     落としておく（秒まで入れると毎秒書き換わる）。
+ *     model は JSON にできる素のデータだけにする。
  * - `render(model, box)`
  *     model を SVG の文字列にする。`box` は割り当てられた領域 `{ x, y, w, h }`（px）。
  */

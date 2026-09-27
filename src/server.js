@@ -7,6 +7,7 @@ import { ConfigError, loadConfig } from './config.js';
 import { Dashboard } from './dashboard.js';
 import { ORIENTATIONS, renderScreen } from './render.js';
 import { renderPage } from './page.js';
+import { PROBE_GIF, probeCss } from './viewport.js';
 
 const USAGE = `使い方: npm start -- [オプション]
 
@@ -56,7 +57,7 @@ try {
 
 /** 初回の HTML を描くときの想定サイズ（Kindle Oasis 第9世代のパネル解像度）。 */
 const DEFAULT_VIEWPORT = { width: 1264, height: 1680 };
-/** クライアントが実測したビューポート。次の HTML 生成に使う。 */
+/** probe.css で測ったビューポート。次の HTML 生成に使う。 */
 let viewport = { ...DEFAULT_VIEWPORT };
 
 /** 設定ファイルが書き換わったかを見分けるための印。 */
@@ -103,13 +104,15 @@ function clampSize(value, fallback) {
   return Number.isFinite(n) && n >= 120 && n <= 4096 ? Math.round(n) : fallback;
 }
 
-/** クライアントが URL に載せてきた実測ビューポートを取り込む。 */
-function recordViewport(params) {
-  const width = clampSize(params.get('w'), 0);
-  const height = clampSize(params.get('h'), 0);
-  if (width && height && (viewport.width !== width || viewport.height !== height)) {
-    viewport = { width, height };
-    console.log(`ビューポート: ${width} x ${height} px`);
+/** プローブで測れた幅・高さを取り込む。幅と高さは別々のリクエストで届く。 */
+function recordProbe(params) {
+  const next = {
+    width: clampSize(params.get('w'), viewport.width),
+    height: clampSize(params.get('h'), viewport.height),
+  };
+  if (next.width !== viewport.width || next.height !== viewport.height) {
+    viewport = next;
+    console.log(`ビューポート: ${next.width} x ${next.height} px`);
   }
 }
 
@@ -120,27 +123,35 @@ async function handle(req, res, url) {
     const body = renderPage({
       width: viewport.width,
       height: viewport.height,
-      revision: dashboard.revision,
-      pollSec: config.pollSec,
+      refreshSec: config.refreshSec,
       token: Date.now(),
     });
     noStore(res);
+    // meta refresh に加えて HTTP ヘッダでも更新を指示する。
+    res.setHeader('Refresh', String(config.refreshSec));
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(body);
     return;
   }
 
-  if (url.pathname === '/revision') {
-    recordViewport(url.searchParams);
-    const body = String(dashboard.revision);
+  if (url.pathname === '/probe.css') {
+    const { body, encoding } = probeCss(/\bgzip\b/.test(req.headers['accept-encoding'] ?? ''));
     noStore(res);
-    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Content-Length': body.length });
+    if (encoding) res.setHeader('Content-Encoding', encoding);
+    res.writeHead(200, { 'Content-Type': 'text/css; charset=utf-8', 'Content-Length': body.length });
     res.end(body);
     return;
   }
 
+  if (url.pathname === '/probe') {
+    recordProbe(url.searchParams);
+    noStore(res);
+    res.writeHead(200, { 'Content-Type': 'image/gif', 'Content-Length': PROBE_GIF.length });
+    res.end(PROBE_GIF);
+    return;
+  }
+
   if (url.pathname === '/screen.png') {
-    recordViewport(url.searchParams);
     const png = await renderScreen({
       view: dashboard.view,
       width: clampSize(url.searchParams.get('w'), DEFAULT_VIEWPORT.width),
@@ -162,8 +173,8 @@ async function handle(req, res, url) {
 
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host ?? 'localhost'}`);
-  // ポーリングはログが流れやすいので、画面が変わるやり取りだけを残す。
-  if (url.pathname !== '/revision') {
+  // プローブはログが流れやすいので、ページと画像のやり取りだけを残す。
+  if (url.pathname !== '/probe' && url.pathname !== '/probe.css') {
     console.log(`${new Date().toISOString()} ${req.method} ${url.pathname}`);
   }
   handle(req, res, url).catch((err) => {

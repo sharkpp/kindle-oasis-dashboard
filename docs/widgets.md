@@ -333,9 +333,7 @@ export function normalize(item, path, sources) {}
 /**
  * 表示内容（model）を組み立てる。
  *
- * model は JSON にできる素のデータだけにする。画面全体の model が前回と
- * 一字一句同じなら版番号を上げず、電子ペーパーを書き換えない。
- * 時刻を秒まで入れると毎秒書き換わるので、必要な粒度まで落としておく。
+ * model は JSON にできる素のデータだけにする。
  *
  * @param {object} options normalize の戻り値
  * @param {{now: Date, timezone: string, sources: object}} ctx

@@ -582,18 +582,6 @@ test('ぴよログが取れていなければ項目に理由を出す', async ()
   assert.equal(findItem(dashboard.view, 'calendar').note, 'カレンダーを取得できません');
 });
 
-test('表示内容が同じ間は版番号を上げない', async () => {
-  const dashboard = dashboardWithFixtures();
-  // 分の境目からずらしておく。残り時間は目標時刻から数えるので、境目ちょうどだと毎回変わる。
-  const base = new Date(NOW.getTime() + 30000);
-  await dashboard.tick(base);
-  const first = dashboard.revision;
-  await dashboard.tick(new Date(base.getTime() + 10000));
-  assert.equal(dashboard.revision, first, '表示が変わらない間は画面を書き換えない');
-  await dashboard.tick(new Date(base.getTime() + 61000));
-  assert.equal(dashboard.revision, first + 1, '残り時間の分が変われば書き換える');
-});
-
 test('画面をグレースケール PNG に描ける', async () => {
   const dashboard = dashboardWithFixtures();
   await dashboard.tick(NOW);

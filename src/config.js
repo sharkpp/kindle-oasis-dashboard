@@ -114,7 +114,7 @@ export function loadConfig(path) {
   const sources = readSources(root.sources, 'sources');
   return {
     timezone: checkTimezone(asString(root.timezone, 'timezone', { fallback: 'Asia/Tokyo' })),
-    pollSec: asNumber(root.poll_sec, 'poll_sec', { fallback: 10, min: 1, max: 600 }),
+    refreshSec: asNumber(root.refresh_sec, 'refresh_sec', { fallback: 60, min: 10, max: 3600 }),
     tickSec: asNumber(root.tick_sec, 'tick_sec', { fallback: 20, min: 1, max: 600 }),
     padding: readPadding(root.padding, 'padding'),
     gap: asNumber(root.gap, 'gap', { fallback: 16, min: 0, max: 200 }),

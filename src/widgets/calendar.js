@@ -140,7 +140,7 @@ export function build(options, ctx) {
     label: options.label,
     entries: withLevels(entries),
     note: pending.length ? pendingNote : entries.length === 0 ? 'この先の予定はありません' : '',
-    // 見せ方も表示内容の一部。変えれば版番号が上がる。
+    // 描くときに使う段階ごとの見せ方。
     levels: options.levels,
   };
 }

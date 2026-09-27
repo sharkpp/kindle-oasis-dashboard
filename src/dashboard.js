@@ -2,8 +2,6 @@
  * 表示内容の組み立て。
  *
  * 一定間隔で外部フィードを更新し、設定どおりに各項目の表示内容を作る。
- * 作った内容が前回と一字一句同じなら版番号を上げない。電子ペーパーの書き換えは
- * 見た目が変わるときだけで足りる。
  *
  * フィードは取得元の名前で持つ。同じ種別の取得元がいくつあっても、それぞれ別の
  * キャッシュになる。
@@ -22,8 +20,6 @@ export class Dashboard {
     this.feeds = {};
     this.feedKeys = {};
     this.view = null;
-    this.revision = 0;
-    this.signature = null;
     this.#syncFeeds(config);
     // フィードの取得を待たずに描ける状態にしておく。取得中であることは各項目が出す。
     this.#apply(new Date());
@@ -68,18 +64,11 @@ export class Dashboard {
   /** フィードを必要に応じて取り直し、表示内容を作り直す。 */
   async tick(now = new Date()) {
     await Promise.all(Object.values(this.feeds).map((feed) => feed.refresh(now.getTime())));
-    return this.#apply(now);
+    this.#apply(now);
   }
 
-  /** 作った内容が前回と違うときだけ差し替え、版番号を上げる。 */
   #apply(now) {
-    const view = this.#build(now);
-    const signature = JSON.stringify(view);
-    if (signature === this.signature) return false;
-    this.signature = signature;
-    this.view = view;
-    this.revision += 1;
-    return true;
+    this.view = this.#build(now);
   }
 
   #build(now) {
@@ -107,7 +96,7 @@ function describeChanges(prev, next) {
   if (JSON.stringify(prev.columns) !== JSON.stringify(next.columns)) changes.push('レイアウト');
   if (JSON.stringify(prev.padding) !== JSON.stringify(next.padding)) changes.push('余白');
   if (prev.gap !== next.gap) changes.push('すき間');
-  if (prev.pollSec !== next.pollSec) changes.push(`ポーリング間隔: ${next.pollSec} 秒`);
+  if (prev.refreshSec !== next.refreshSec) changes.push(`再読み込みの間隔: ${next.refreshSec} 秒`);
   if (prev.tickSec !== next.tickSec) changes.push(`更新間隔: ${next.tickSec} 秒`);
   return changes;
 }
