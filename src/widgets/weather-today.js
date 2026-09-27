@@ -16,6 +16,7 @@ export const type = 'weather-today';
 const FIELDS = {
   symbol: (day) => day.symbol,
   weather: (day) => day.weather,
+  weather_detail: (day) => day.detail,
   weather_short: (day) => day.short,
   pop: (day) => (day.pop === null ? '—' : String(day.pop)),
   temp_min: (day) => (day.tempMin === null ? '—' : String(day.tempMin)),

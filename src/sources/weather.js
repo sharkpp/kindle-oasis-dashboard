@@ -8,13 +8,16 @@
  *   reportedAt: Date,      // 発表時刻
  *   areaName: string,      // 予報の区域名
  *   cityName: string,      // 設定で指した地点の名前
- *   days: [{ date, code, symbol, weather, short, pop, tempMin, tempMax }],
+ *   days: [{ date, code, symbol, weather, detail, short, pop, tempMin, tempMax }],
  *   bands: [{ date, hour, hours, pop, symbol, short, temp }],  // 時間帯ごと
  *   warnings: string[],    // 発表中の警報・注意報
  * }
  * ```
  *
  * `days[].date` と `bands[].date` は `YYYY-MM-DD`。日本の天気予報なので日本時間で数える。
+ * 天気の言葉は 3 つの細かさで持つ。`weather` が発表そのまま
+ * （気象庁なら「くもり 時々 晴れ 未明 雨」）、`detail` がその日の主な天気を
+ * つなぎ言葉ごと取ったもの（「くもり時々晴れ」）、`short` が主な天気だけ（「くもり」）。
  * プロバイダによって埋まらない欄がある（気象庁は時間帯ごとの天気を出していない、
  * tenki.jp は警報・注意報を出していない）。埋まらない欄は null か空にする。
  */

@@ -219,16 +219,25 @@ test('気象庁の予報を日付ごとにまとめる', () => {
   assert.equal(data.areaName, '東京地方');
 
   // 短期の 3 日分。降水確率は 6 時間ごとの値のうち、その日のいちばん高いもの。
+  // weather は発表そのまま、detail はつなぎ言葉まで、short は主な天気だけ。
   assert.deepEqual(data.days.slice(0, 3), [
-    { date: '2026-09-22', code: '101', symbol: '☀', weather: '晴れ 時々 くもり', short: '晴れ', pop: 20, tempMin: 19, tempMax: 28 },
-    { date: '2026-09-23', code: '201', symbol: '☁', weather: 'くもり 時々 晴れ', short: 'くもり', pop: 40, tempMin: 21, tempMax: 26 },
+    { date: '2026-09-22', code: '101', symbol: '☀', weather: '晴れ 時々 くもり', detail: '晴れ時々くもり', short: '晴れ', pop: 20, tempMin: 19, tempMax: 28 },
+    { date: '2026-09-23', code: '201', symbol: '☁', weather: 'くもり 時々 晴れ', detail: 'くもり時々晴れ', short: 'くもり', pop: 40, tempMin: 21, tempMax: 26 },
     // 明後日の天気は短期から、降水確率と気温は週間から。
-    { date: '2026-09-24', code: '300', symbol: '☂', weather: '雨', short: '雨', pop: 60, tempMin: 18, tempMax: 22 },
+    { date: '2026-09-24', code: '300', symbol: '☂', weather: '雨', detail: '雨', short: '雨', pop: 60, tempMin: 18, tempMax: 22 },
   ]);
 
   // 週間だけの日は、文章が無いのでコードの大分類を短い天気に使う。
   const snowy = data.days.find((day) => day.date === '2026-09-29');
   assert.deepEqual([snowy.code, snowy.symbol, snowy.short], ['400', '☃', '雪']);
+});
+
+test('発表文の時間帯より前の、主な天気だけを詳しく取る', () => {
+  // 「雨 夜のはじめ頃 くもり」のように、あとから時間帯で限った天気が続くことがある。
+  // 主な天気は「雨」なので、そこで切る。
+  const data = weatherFixture({ class10: '130020', amedas: '44172' });
+  assert.equal(data.days[0].weather, '雨');
+  assert.equal(data.days[0].detail, '雨');
 });
 
 test('発表中の警報・注意報だけを出す', () => {
@@ -266,6 +275,7 @@ test('週間予報に区域が無くても、短期の分だけで出す', () =>
     code: '200',
     symbol: '☁',
     weather: 'くもり',
+    detail: 'くもり',
     short: 'くもり',
     pop: null,
     tempMin: null,
@@ -277,8 +287,8 @@ test('今日・明日・明後日の天気を並べる', async () => {
   const dashboard = dashboardWithFixtures();
   await dashboard.tick(NOW);
   assert.deepEqual(findItem(dashboard.view, 'weather').columns, [
-    { day: 'きょう', symbol: '☀', weather: '晴れ', pop: '20%', temp: '19/28' },
-    { day: 'あす', symbol: '☁', weather: 'くもり', pop: '40%', temp: '21/26' },
+    { day: 'きょう', symbol: '☀', weather: '晴れ時々くもり', pop: '20%', temp: '19/28' },
+    { day: 'あす', symbol: '☁', weather: 'くもり時々晴れ', pop: '40%', temp: '21/26' },
     { day: 'あさって', symbol: '☂', weather: '雨', pop: '60%', temp: '18/22' },
   ]);
 });
@@ -308,6 +318,7 @@ test('tenki.jp のページから予報を読む', () => {
     code: null,
     symbol: '☀',
     weather: '晴のち曇',
+    detail: '晴のち曇',
     short: '晴',
     pop: 20,
     tempMin: 21,

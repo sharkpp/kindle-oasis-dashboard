@@ -21,6 +21,14 @@ import { areaTables, resolveCity } from './jma-area.js';
 const FORECAST_URL = (area) => `https://www.jma.go.jp/bosai/forecast/data/forecast/${area}.json`;
 const WARNING_URL = (area) => `https://www.jma.go.jp/bosai/warning/data/warning/${area}.json`;
 
+/**
+ * 天気の言葉と、その並べ方。発表文から先頭の天気句を取り出すのに使う。
+ * 気象庁は天気コードに対応する短い表記（「晴時々くもり」など）を公開していないので、
+ * 発表文の言葉をそのまま使う。
+ */
+const WEATHER_WORDS = /^(晴れ|くもり|雨|雪|みぞれ|雨か雪|雪か雨|ふぶき|あられ|ひょう|霧|暴風雪)$/;
+const CONNECTORS = /^(のち|後|時々|一時)$/;
+
 /** 天気コードの百の位が天気の大分類。記号と、文章が無いときの短い天気はこれで決まる。 */
 const SYMBOLS = { 1: '☀', 2: '☁', 3: '☂', 4: '☃' };
 const CATEGORIES = { 1: '晴れ', 2: 'くもり', 3: '雨', 4: '雪' };
@@ -70,10 +78,37 @@ const toNumber = (value) => {
 function dayEntry(days, date) {
   let day = days.get(date);
   if (!day) {
-    day = { date, code: null, symbol: '', weather: '', short: '', pop: null, tempMin: null, tempMax: null };
+    day = {
+      date,
+      code: null,
+      symbol: '',
+      weather: '',
+      detail: '',
+      short: '',
+      pop: null,
+      tempMin: null,
+      tempMax: null,
+    };
     days.set(date, day);
   }
   return day;
+}
+
+/**
+ * 発表文の先頭の天気句。「晴れ 時々 くもり 未明 雨」なら「晴れ時々くもり」。
+ *
+ * 気象庁の発表文は、主な天気のあとに時間帯や場所で限った天気が続く
+ * （「雨 夜のはじめ頃 くもり」）。時間帯の言葉が出たところで切ると、
+ * その日の主な天気が「のち」「時々」「一時」を含んだ形で取れる。
+ */
+function detailOf(text) {
+  const parts = [];
+  for (const token of text.split(' ')) {
+    if (!WEATHER_WORDS.test(token) && !CONNECTORS.test(token)) break;
+    parts.push(token);
+  }
+  while (parts.length && CONNECTORS.test(parts.at(-1))) parts.pop();
+  return parts.join('');
 }
 
 /** 6 時間ごとの降水確率の帯。 */
@@ -124,7 +159,8 @@ function parseForecast(json, { class10: subArea, amedas: tempArea }) {
     day.symbol = SYMBOLS[Number(String(code).charAt(0))] ?? '';
     // 気象庁の天気の文は全角空白で区切られる。先頭が主な天気。
     day.weather = (weather.weathers?.[i] ?? '').replace(/　+/g, ' ').trim();
-    day.short = day.weather.split(' ')[0] ?? '';
+    day.detail = detailOf(day.weather);
+    day.short = day.detail.split(/のち|後|時々|一時/)[0] ?? '';
   });
 
   // 短期の降水確率は 6 時間ごと。その日のいちばん高い値を代表にする。
@@ -158,6 +194,7 @@ function parseForecast(json, { class10: subArea, amedas: tempArea }) {
         day.symbol = SYMBOLS[category] ?? '';
         // 週間予報には文章が無いので、コードの大分類を短い天気として使う。
         day.short = CATEGORIES[category] ?? '';
+        day.detail = day.short;
         day.weather = day.short;
       }
       fill(day, { pop: toNumber(weeklyWeather.pops?.[i]) });

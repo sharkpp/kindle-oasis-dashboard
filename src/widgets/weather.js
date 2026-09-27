@@ -38,7 +38,8 @@ export function build(options, ctx) {
     .map((day) => ({
       day: dayLabel(daysFrom(today, day.date), day.date),
       symbol: day.symbol || '–',
-      weather: day.short,
+      // 「くもり時々晴れ」のように、つなぎ言葉まで入れた表記を出す。
+      weather: day.detail || day.short,
       pop: day.pop === null ? '—' : `${day.pop}%`,
       temp:
         day.tempMin === null && day.tempMax === null
