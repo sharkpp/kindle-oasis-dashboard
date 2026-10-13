@@ -1,0 +1,14 @@
+name: kindle-oasis-dashboard
+
+services:
+  dashboard:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      # ファイル単体ではなくディレクトリを渡す。エディタが保存時にファイルを
+      # 置き換えても、コンテナから新しい中身が見えて設定の読み直しが効く。
+      - ./:/config:ro
+    # 起動引数を足すときはここに書く（--config は Dockerfile で指定済み）
+    command: ["--orientation", "portrait"]
