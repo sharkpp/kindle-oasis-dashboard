@@ -27,6 +27,20 @@ Kindle を同じ Wi-Fi につなぎ、ブラウザ（ホーム → メニュー 
 
 `config.yaml` にはフィードの秘密 URL が入るので、コミットしない（`.gitignore` 済み）。
 
+### Docker Compose で動かす
+
+```sh
+cp config.example.yaml config.yaml   # URL と時間を自分のものに書き換える
+docker compose up -d --build
+```
+
+このディレクトリを読み取り専用で `/config` に渡し、`/config/config.yaml` を読む。
+`config.yaml` を書き換えれば、コンテナを動かしたまま読み直す。
+起動引数は [compose.yaml](compose.yaml) の `command` に書く（`--config` は不要）。
+
+起動時に表示される IP アドレスはコンテナの中のものなので、Kindle からは
+`http://<ホストの IP>:3000/` を開く。
+
 ### 起動引数
 
 `npm start` から渡すときは `--` を挟む（例: `npm start -- --orientation landscape`）。
