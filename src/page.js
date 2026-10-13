@@ -15,7 +15,7 @@ export function renderPage({ width, height, refreshSec, token }) {
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-<title>MyRealDashboard</title>
+<title>kindle-oasis-dashboard</title>
 <link rel="stylesheet" href="/probe.css">
 <style>
 html, body { margin:0; padding:0; border:0; width:100%; height:100%; background:#fff; overflow:hidden; }

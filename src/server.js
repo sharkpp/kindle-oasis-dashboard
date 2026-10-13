@@ -201,7 +201,7 @@ loop().catch((err) => console.error(err));
 
 server.listen(options.port, '0.0.0.0', () => {
   console.log(
-    `MyRealDashboard — 設定 ${options.config} / ${options.orientation}` +
+    `kindle-oasis-dashboard — 設定 ${options.config} / ${options.orientation}` +
       (options.markers ? ' / 位置合わせマーカーあり' : '')
   );
   for (const address of ['localhost', ...lanAddresses()]) {

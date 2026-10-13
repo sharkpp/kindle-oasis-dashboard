@@ -1,4 +1,4 @@
-# MyRealDashboard の設定。
+# kindle-oasis-dashboard の設定。
 # これを config.yaml にコピーして、URL と時間を自分のものに置き換える。
 # フィードの URL は URL 自体が認証情報なので、config.yaml は公開しないこと。
 

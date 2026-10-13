@@ -1,4 +1,4 @@
-# MyRealDashboard
+# kindle-oasis-dashboard
 
 Kindle Oasis（第9世代）の内蔵ブラウザに常時表示する、子供の予定ダッシュボード。
 次のごはんまでの残り時間、次のミルクの時間、Google カレンダーの次の予定などを、
@@ -17,7 +17,7 @@ npm start
 起動すると、Kindle から開く URL が表示される。
 
 ```
-MyRealDashboard — 設定 config.yaml / portrait
+kindle-oasis-dashboard — 設定 config.yaml / portrait
   http://localhost:3000/
   http://192.168.11.35:3000/
 ```

@@ -1,4 +1,4 @@
-# SPEC — MyRealDashboard
+# SPEC — kindle-oasis-dashboard
 
 Kindle Oasis（第9世代）の内蔵ブラウザに常時表示する、子供の予定ダッシュボード。
 
